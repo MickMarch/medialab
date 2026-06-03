@@ -1,6 +1,6 @@
-[submodule "torrent_downloader"]
-	path = torrent_downloader
-	url = https://github.com/MickMarch/torrent_downloader.git
+[submodule "torrent-downloader"]
+	path = torrent-downloader
+	url = https://github.com/MickMarch/torrent-downloader.git
 [submodule "medialab-bot"]
 	path = medialab-bot
 	url = https://github.com/MickMarch/medialab-bot.git
