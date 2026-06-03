@@ -11,10 +11,11 @@ Each subdirectory is an independent git repo. This root repo tracks only workspa
 ```
 medialab/
 ├── CLAUDE.md                     (this file - workspace context)
-├── .gitignore                    (blocks service subdirs from root repo)
-├── torrent_downloader/           (independent git repo)
-├── medialab-bot/                 (independent git repo - next)
-└── medialab-orchestrator/        (independent git repo - future)
+├── .gitmodules                   (submodule registry - source of truth for service versions)
+├── .gitignore                    (blocks unregistered future service dirs)
+├── torrent-downloader/           (submodule - independent git repo)
+├── medialab-bot/                 (submodule - independent git repo)
+└── medialab-orchestrator/        (future submodule - not yet created)
 ```
 
 ```
@@ -31,11 +32,33 @@ medialab-bot → medialab-orchestrator → torrent-downloader
                                      → Jellyfin API
 ```
 
+## Session start - check submodule state
+
+Run this at the start of every session to see which services have changed since last pinned:
+
+```bash
+git submodule status
+```
+
+Output format: `[+]<sha> <path> (<tag or branch>)`
+
+- No prefix - submodule matches pinned SHA, no changes since last session
+- `+` prefix - service has new commits, context in that service's CLAUDE.md may be stale; read it before working on that service
+- `-` prefix - submodule not initialized, run `git submodule update --init`
+
+To update the root repo's pin to a service's latest commit:
+
+```bash
+git submodule update --remote torrent-downloader
+git add torrent-downloader
+git commit -m "chore: update torrent-downloader submodule pin"
+```
+
 ## Services
 
 ### torrent-downloader (v1.0.0 - complete)
 
-FastAPI REST API. GitHub: https://github.com/MickMarch/torrent_downloader
+FastAPI REST API. GitHub: https://github.com/MickMarch/torrent-downloader
 
 Endpoints:
 - `GET /api/v1/health` - public, no auth
