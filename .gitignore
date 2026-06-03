@@ -1,6 +1,4 @@
-# Microservice repos - each is an independent git repo, not committed here
-torrent_downloader/
-medialab-bot/
+# Future service dirs not yet registered as submodules
 medialab-orchestrator/
 media-library/
 
