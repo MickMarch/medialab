@@ -1,0 +1,31 @@
+# Microservice repos - each is an independent git repo, not committed here
+torrent_downloader/
+medialab-bot/
+medialab-orchestrator/
+media-library/
+
+# Python
+__pycache__/
+*.py[oc]
+*.egg-info
+.venv/
+dist/
+build/
+
+# Environment
+.env
+*.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Node (for any JS tooling at root)
+node_modules/
