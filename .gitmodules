@@ -4,3 +4,6 @@
 [submodule "medialab-bot"]
 	path = medialab-bot
 	url = https://github.com/MickMarch/medialab-bot.git
+[submodule "medialab-jellyfin"]
+	path = medialab-jellyfin
+	url = https://github.com/MickMarch/medialab-jellyfin.git
