@@ -15,6 +15,7 @@ medialab/
 ├── .gitignore                    (blocks unregistered future service dirs)
 ├── torrent-downloader/           (submodule - independent git repo)
 ├── medialab-bot/                 (submodule - independent git repo)
+├── medialab-jellyfin/            (submodule - independent git repo)
 └── medialab-orchestrator/        (future submodule - not yet created)
 ```
 
@@ -23,14 +24,42 @@ Discord user
     | slash command
 medialab-bot (discord.py)
     | HTTP + X-API-Key
-torrent-downloader (FastAPI)
-    |
-qBittorrent + TMDB
+torrent-downloader (FastAPI) ---- qBittorrent + TMDB (host)
 
-Future (when Jellyfin wired up):
-medialab-bot → medialab-orchestrator → torrent-downloader
-                                     → Jellyfin API
+Future (when orchestrator built):
+medialab-bot ---------------------------------> torrent-downloader -> qBittorrent (host)
+                                                        |
+qBittorrent (host, run-on-completion script)           |
+    | webhook (torrent finished)                       |
+    v                                                   v
+medialab-orchestrator ----------------------------> medialab-jellyfin -> Jellyfin (host)
+    (stop seeding, add path, trigger scan)
 ```
+
+## Roadmap order
+
+1. **medialab-jellyfin library endpoints** - scan trigger, add path, item search.
+   Not yet built; blocks the orchestrator MVP below.
+2. **medialab-orchestrator MVP** - download-complete webhook -> stop-seeding +
+   Jellyfin add-path/scan. This is the core value prop.
+3. **torrent-downloader v1.1** - `media_type`-based save path resolution
+   (resolves medialab-bot save-path tech debt as a side effect).
+4. **medialab-bot Dockerfile** - so all services are containerized per Deployment.
+5. **medialab-setup CLI wizard** (new tool, not a microservice) - one-time
+   pre-deployment setup: collects TMDB/Jellyfin/qBittorrent API keys with
+   guided instructions for obtaining each, creates/selects movie+TV
+   directories, registers them as Jellyfin libraries, writes per-service
+   `.env` files, optionally runs `docker compose up`. Express mode (defaults)
+   and custom mode (every config value editable). Lives in its own directory/repo,
+   run locally before containers exist - not a long-running service.
+6. **medialab-bot `/settings` cog** - runtime config viewing/editing via Discord
+   slash commands (`/settings get`, `/settings set key value`), calling each
+   service's settings endpoint (torrent-downloader already has
+   `core/settings_manager.py` - check its current surface before designing this).
+   Bot reports whether a changed setting hot-reloads or requires a container
+   restart. No separate GUI - Discord is the existing user-facing surface.
+
+Items 5-6 are fast-follows after the MVP (1-4); do not block the MVP on them.
 
 ## Session start - check submodule state
 
@@ -80,6 +109,15 @@ Request tracing: every response includes `X-Request-ID` UUID header.
 v1.1 roadmap (not yet built):
 - `GET /api/v1/search/trending?type=movie|show&window=day|week`
 - `GET /api/v1/search/similar?tmdb_id=123&type=movie|show`
+- `POST /api/v1/download` accepts `media_type` (movie|show) and resolves the
+  save path itself: `{MOVIES_PATH}` or `{TV_PATH}` (configured per-container
+  via env vars, both volume-mounted to the same host directories medialab-jellyfin
+  and Jellyfin use). No genre subfolders - media type is the only split needed,
+  since Jellyfin libraries are organized by media type at the top level.
+  This removes save-path config from medialab-bot entirely (see medialab-bot
+  tech debt below) and means medialab-jellyfin's library-scan trigger needs
+  no path info from torrent-downloader - both containers see the same files
+  via shared volume mounts.
 
 ### medialab-bot (not yet started)
 
@@ -98,10 +136,67 @@ Multi-step flow: user picks TMDB result via Discord Select component, then picks
 resolution, then confirms download. State lives in Discord message components - no
 server-side session needed.
 
+Roadmap: needs a Dockerfile (none yet) per the Deployment section below - mirror
+torrent-downloader's two-stage uv install pattern, non-root user, hatch-vcs
+APP_VERSION build arg.
+
+Tech debt in this service to resolve when orchestrator is built - see
+"medialab-bot tech debt" under medialab-orchestrator below.
+
+### medialab-jellyfin (scaffolding only)
+
+FastAPI REST API wrapping the Jellyfin media server API. GitHub:
+https://github.com/MickMarch/medialab-jellyfin (private)
+
+Endpoints:
+- `GET /api/v1/health` - public, no auth, reports Jellyfin reachability
+
+Same conventions as torrent-downloader: `X-API-Key` auth, structured error
+shape, rate limiting, `X-Request-ID` tracing, `hatch-vcs` versioning.
+
+Planned (not yet implemented, spec before building):
+- `POST /api/v1/library/scan` - trigger Jellyfin library scan (`POST /Library/Media/Updated`)
+- `POST /api/v1/library/paths` - add local directory to a Jellyfin library
+- `GET /api/v1/library/items` - search library contents (`GET /Items`)
+
+Stays a thin proxy - assumes Jellyfin already reachable. No power-management
+or workflow logic here; that belongs to the orchestrator.
+
 ### medialab-orchestrator (future)
 
-Add when Jellyfin integration starts. Owns cross-service workflows (download complete
-polling, Jellyfin library scan trigger). Not needed until then.
+Add when event-driven cross-service workflows are needed. Owns:
+
+1. **Download-complete handling.** qBittorrent supports "Run external program
+   on torrent completion" (a script invoked once per finished torrent, no
+   polling). That script calls a webhook on the orchestrator
+   (e.g. `POST /webhooks/torrent-complete` with hash/name from `%I`/`%N`).
+   On receipt, orchestrator:
+   - calls torrent-downloader `POST /api/v1/transfers/stop-seeding`
+   - calls medialab-jellyfin to add the download path to the library and
+     trigger a scan
+2. **Jellyfin host availability.** Power-on Jellyfin host when down
+   (mechanism TBD - WoL / smart plug / SSH, depends on host setup). Runs
+   before any medialab-jellyfin call if the host might be asleep.
+
+Orchestrator owns preconditions (is the dependency reachable/awake) and
+multi-service state; the wrapper services (torrent-downloader,
+medialab-jellyfin) stay stateless proxies assuming their dependency is up.
+
+**medialab-bot tech debt to fold into this work:**
+
+- `AppConfig.torrent_save_path` and `AppConfig.tmp_docker_save_path`
+  (`medialab-bot/src/medialab_bot/config.py`) are passed by the bot into
+  `download()` and `get_storage()`
+  (`client/_torrents.py`, `client/_status.py`). Save-path policy is a
+  workflow/placement concern, not something the Discord UI layer should own.
+  Resolved by torrent-downloader's v1.1 `media_type`-based path resolution
+  (see torrent-downloader roadmap above) - bot passes `media_type` instead of
+  a path, and these config fields are removed from medialab-bot.
+- `medialab-bot/src/medialab_bot/main.py` checks torrent-downloader's
+  `/health` (incl. VPN binding) at startup and logs warnings. Once orchestrator
+  exists, consider whether cross-service health aggregation (torrent-downloader
+  + medialab-jellyfin + Jellyfin/qBittorrent reachability) belongs there
+  instead, surfaced to the bot via a single orchestrator health check.
 
 ## Shared conventions
 
@@ -122,6 +217,20 @@ polling, Jellyfin library scan trigger). Not needed until then.
 Each service is an independent repo with its own tags and releases.
 Version tags: `vX.Y.Z` annotated tags pushed to GitHub, GitHub Release created from tag.
 Branch strategy: feature branches off main, PR to merge.
+
+## Deployment
+
+All microservices (torrent-downloader, medialab-bot, medialab-jellyfin,
+medialab-orchestrator) are intended to run as Docker containers on the host
+PC. They reach host-installed applications - qBittorrent, Jellyfin, and any
+future host apps - over the network via `host.docker.internal`, the same
+pattern torrent-downloader already uses for qBittorrent (see its
+`.env.example` `QB_HOST` notes). Each service's Dockerfile and `.env.example`
+already account for this (host vs. container `*_HOST` values).
+
+Containers communicate with each other over HTTP + `X-API-Key`, same as they
+would un-containerized - no service-to-service magic beyond normal REST calls
+(plus a shared Docker network/compose file once orchestrator exists).
 
 ## Environment
 
