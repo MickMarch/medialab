@@ -49,9 +49,12 @@ medialab-orchestrator ----------------------------> medialab-jellyfin -> Jellyfi
    pre-deployment setup: collects TMDB/Jellyfin/qBittorrent API keys with
    guided instructions for obtaining each, creates/selects movie+TV
    directories, registers them as Jellyfin libraries, writes per-service
-   `.env` files, optionally runs `docker compose up`. Express mode (defaults)
-   and custom mode (every config value editable). Lives in its own directory/repo,
-   run locally before containers exist - not a long-running service.
+   `.env` files (each service keeps its own `.env`/`.env.example`, not a
+   shared root `.env` - root compose references them via per-service
+   `env_file:` paths), optionally runs `docker compose up`. Express mode
+   (defaults) and custom mode (every config value editable). Lives in its
+   own directory/repo, run locally before containers exist - not a
+   long-running service.
 6. **medialab-bot `/settings` cog** - runtime config viewing/editing via Discord
    slash commands (`/settings get`, `/settings set key value`), calling each
    service's settings endpoint (torrent-downloader already has
