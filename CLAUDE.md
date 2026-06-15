@@ -39,7 +39,13 @@ medialab-orchestrator ----------------------------> medialab-jellyfin -> Jellyfi
 ## Roadmap order
 
 1. **medialab-jellyfin library endpoints** - scan trigger, add path, item search.
-   Not yet built; blocks the orchestrator MVP below.
+   Not yet built; blocks the orchestrator MVP below. In progress on
+   `feat/library-router`; spec verified against a live Jellyfin v10.11.8
+   instance, written up in medialab-jellyfin's CLAUDE.md "Planned endpoints"
+   section. Library-name resolution for `library/paths` uses dynamic
+   discovery (`GET /Library/VirtualFolders` filtered by `CollectionType`),
+   not env-var config - keeps Jellyfin itself as the source of truth and
+   avoids drift if libraries are renamed in the Jellyfin UI.
 2. **medialab-orchestrator MVP** - download-complete webhook -> stop-seeding +
    Jellyfin add-path/scan. This is the core value prop.
 3. **torrent-downloader v1.1** - `media_type`-based save path resolution
