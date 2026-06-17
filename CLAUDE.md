@@ -39,17 +39,17 @@ medialab-orchestrator ----------------------------> medialab-jellyfin -> Jellyfi
 ## Roadmap order
 
 1. **medialab-jellyfin library endpoints** - scan trigger, add path, item search.
-   Not yet built; blocks the orchestrator MVP below. In progress on
-   `feat/library-router`; spec verified against a live Jellyfin v10.11.8
-   instance, written up in medialab-jellyfin's CLAUDE.md "Planned endpoints"
-   section. Library-name resolution for `library/paths` uses dynamic
-   discovery (`GET /Library/VirtualFolders` filtered by `CollectionType`),
-   not env-var config - keeps Jellyfin itself as the source of truth and
-   avoids drift if libraries are renamed in the Jellyfin UI.
-2. **medialab-orchestrator MVP** - download-complete webhook -> stop-seeding +
-   Jellyfin add-path/scan. This is the core value prop.
-3. **torrent-downloader v1.1** - `media_type`-based save path resolution
-   (resolves medialab-bot save-path tech debt as a side effect).
+   COMPLETE. PR merged, library router live on main.
+2. **torrent-downloader v1.1** - `media_type`-based save path resolution.
+   Moved before orchestrator: qBittorrent's completion script provides save
+   path (`%F`/`%R`) and torrent hash (`%I`) but not media type. The orchestrator
+   needs media_type to call `POST /library/paths` with the right Jellyfin library.
+   torrent-downloader must store media_type against the hash at download submission
+   so the orchestrator can retrieve it at completion time. Resolves medialab-bot
+   save-path tech debt as a side effect.
+3. **medialab-orchestrator MVP** - download-complete webhook -> stop-seeding +
+   Jellyfin add-path/scan. Blocked on torrent-downloader v1.1 (needs media_type
+   lookup by hash). Core value prop.
 4. **medialab-bot Dockerfile** - so all services are containerized per Deployment.
 5. **medialab-setup CLI wizard** (new tool, not a microservice) - one-time
    pre-deployment setup: collects TMDB/Jellyfin/qBittorrent API keys with
@@ -152,21 +152,21 @@ APP_VERSION build arg.
 Tech debt in this service to resolve when orchestrator is built - see
 "medialab-bot tech debt" under medialab-orchestrator below.
 
-### medialab-jellyfin (scaffolding only)
+### medialab-jellyfin (v1 - complete)
 
 FastAPI REST API wrapping the Jellyfin media server API. GitHub:
 https://github.com/MickMarch/medialab-jellyfin (private)
 
 Endpoints:
 - `GET /api/v1/health` - public, no auth, reports Jellyfin reachability
+- `POST /api/v1/library/scan` - trigger Jellyfin library scan (`POST /Library/Media/Updated`)
+- `POST /api/v1/library/paths` - add local directory to a Jellyfin library; resolves
+  target library dynamically via `GET /Library/VirtualFolders` filtered by CollectionType
+  (no env-var config); optional `library_name` override for ambiguous multi-library setups
+- `GET /api/v1/library/items` - search library contents (`GET /Items`)
 
 Same conventions as torrent-downloader: `X-API-Key` auth, structured error
 shape, rate limiting, `X-Request-ID` tracing, `hatch-vcs` versioning.
-
-Planned (not yet implemented, spec before building):
-- `POST /api/v1/library/scan` - trigger Jellyfin library scan (`POST /Library/Media/Updated`)
-- `POST /api/v1/library/paths` - add local directory to a Jellyfin library
-- `GET /api/v1/library/items` - search library contents (`GET /Items`)
 
 Stays a thin proxy - assumes Jellyfin already reachable. No power-management
 or workflow logic here; that belongs to the orchestrator.
