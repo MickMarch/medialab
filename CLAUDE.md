@@ -181,9 +181,24 @@ Add when event-driven cross-service workflows are needed. Owns:
    (e.g. `POST /webhooks/torrent-complete` with hash/name from `%I`/`%N`).
    On receipt, orchestrator:
    - calls torrent-downloader `POST /api/v1/transfers/stop-seeding`
-   - calls medialab-jellyfin to add the download path to the library and
-     trigger a scan
-2. **Jellyfin host availability.** Power-on Jellyfin host when down
+   - calls torrent-downloader `GET /api/v1/transfers/{hash}/info` (v1.1) to
+     get `media_type` and `host_path`
+   - for TV: renames/restructures the downloaded folder into Jellyfin's
+     required convention (`Series Name (Year)/Season NN/`) before any
+     Jellyfin call - see "TV folder naming" below. Movies need no rename
+     (Jellyfin matches movie folders more loosely).
+   - calls medialab-jellyfin `POST /library/paths` (movies/TV root only
+     needs registering once at setup time, not per-download, since Jellyfin
+     recursively scans an already-registered root) and `POST /library/scan`
+     with the renamed path
+2. **TV folder naming.** Jellyfin's TV library requires exact convention:
+   `Series Name (Year)/Season NN/` (season zero-padded, never abbreviated
+   to `S01`). Torrent release names almost never match this
+   (`Show.Name.S01.1080p.GROUP/...`). Orchestrator must parse the release
+   name (PTN, already a torrent-downloader dependency) and move/rename
+   files into the correct structure before triggering a Jellyfin scan.
+   Movies are more forgiving of folder naming and likely need no rename step.
+3. **Jellyfin host availability.** Power-on Jellyfin host when down
    (mechanism TBD - WoL / smart plug / SSH, depends on host setup). Runs
    before any medialab-jellyfin call if the host might be asleep.
 
