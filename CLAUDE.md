@@ -41,15 +41,11 @@ medialab-orchestrator ----------------------------> medialab-jellyfin -> Jellyfi
 1. **medialab-jellyfin library endpoints** - scan trigger, add path, item search.
    COMPLETE. PR merged, library router live on main.
 2. **torrent-downloader v1.1** - `media_type`-based save path resolution.
-   Moved before orchestrator: qBittorrent's completion script provides save
-   path (`%F`/`%R`) and torrent hash (`%I`) but not media type. The orchestrator
-   needs media_type to call `POST /library/paths` with the right Jellyfin library.
-   torrent-downloader must store media_type against the hash at download submission
-   so the orchestrator can retrieve it at completion time. Resolves medialab-bot
-   save-path tech debt as a side effect.
+   COMPLETE. PR merged, `media_type` on `POST /download` plus
+   `GET /transfers/{torrent_hash}/info` live on main.
 3. **medialab-orchestrator MVP** - download-complete webhook -> stop-seeding +
-   Jellyfin add-path/scan. Blocked on torrent-downloader v1.1 (needs media_type
-   lookup by hash). Core value prop.
+   Jellyfin add-path/scan. Unblocked now that torrent-downloader v1.1 ships
+   media_type lookup by hash. Core value prop. Up next.
 4. **medialab-bot Dockerfile** - so all services are containerized per Deployment.
 5. **medialab-setup CLI wizard** (new tool, not a microservice) - one-time
    pre-deployment setup: collects TMDB/Jellyfin/qBittorrent API keys with
@@ -94,7 +90,7 @@ git commit -m "chore: update torrent-downloader submodule pin"
 
 ## Services
 
-### torrent-downloader (v1.0.0 - complete)
+### torrent-downloader (v1.1 - complete)
 
 FastAPI REST API. GitHub: https://github.com/MickMarch/torrent-downloader
 
@@ -104,8 +100,12 @@ Endpoints:
 - `GET /api/v1/search/tmdb/movie/{tmdb_id}` - movie detail
 - `GET /api/v1/search/tmdb/show/{tmdb_id}` - show detail
 - `GET /api/v1/search/torrents` - qBittorrent plugin search, grouped by resolution
-- `POST /api/v1/download` - submit magnet URI (VPN enforced)
+- `POST /api/v1/download` - submit magnet URI (VPN enforced); accepts `media_type`
+  (movie|show) and resolves the save path itself under `MEDIA_HOST_PATH`, no
+  genre subfolders, caches `media_type`/`host_path` against the torrent hash
 - `GET /api/v1/transfers` - active transfers
+- `GET /api/v1/transfers/{torrent_hash}/info` - cached `media_type` and
+  `host_path` for a hash, looked up by the orchestrator at completion time
 - `POST /api/v1/transfers/stop-seeding` - stop seeding completed transfers
 - `GET /api/v1/storage` - disk usage
 - `DELETE /api/v1/cache` - evict cache
@@ -115,18 +115,9 @@ Error shape: `{"status": "error", "code": "<ErrorCode>", "detail": "..."}`.
 Rate limits: 60 req/min general, 20 req/min search. 429 includes `Retry-After` header.
 Request tracing: every response includes `X-Request-ID` UUID header.
 
-v1.1 roadmap (not yet built):
+v1.2 roadmap (not yet built):
 - `GET /api/v1/search/trending?type=movie|show&window=day|week`
 - `GET /api/v1/search/similar?tmdb_id=123&type=movie|show`
-- `POST /api/v1/download` accepts `media_type` (movie|show) and resolves the
-  save path itself: `{MOVIES_PATH}` or `{TV_PATH}` (configured per-container
-  via env vars, both volume-mounted to the same host directories medialab-jellyfin
-  and Jellyfin use). No genre subfolders - media type is the only split needed,
-  since Jellyfin libraries are organized by media type at the top level.
-  This removes save-path config from medialab-bot entirely (see medialab-bot
-  tech debt below) and means medialab-jellyfin's library-scan trigger needs
-  no path info from torrent-downloader - both containers see the same files
-  via shared volume mounts.
 
 ### medialab-bot (not yet started)
 
@@ -138,8 +129,8 @@ Slash commands planned:
 - `/download` - confirm and submit selected magnet
 - `/transfers` - list active downloads
 - `/storage` - disk usage
-- `/trending type` - trending movies or shows (requires torrent-downloader v1.1)
-- `/similar title type` - similar titles (requires torrent-downloader v1.1)
+- `/trending type` - trending movies or shows (requires torrent-downloader v1.2)
+- `/similar title type` - similar titles (requires torrent-downloader v1.2)
 
 Multi-step flow: user picks TMDB result via Discord Select component, then picks torrent
 resolution, then confirms download. State lives in Discord message components - no
@@ -181,7 +172,7 @@ Add when event-driven cross-service workflows are needed. Owns:
    (e.g. `POST /webhooks/torrent-complete` with hash/name from `%I`/`%N`).
    On receipt, orchestrator:
    - calls torrent-downloader `POST /api/v1/transfers/stop-seeding`
-   - calls torrent-downloader `GET /api/v1/transfers/{hash}/info` (v1.1) to
+   - calls torrent-downloader `GET /api/v1/transfers/{hash}/info` to
      get `media_type` and `host_path`
    - for TV: renames/restructures the downloaded folder into Jellyfin's
      required convention (`Series Name (Year)/Season NN/`) before any
