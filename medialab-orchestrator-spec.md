@@ -63,7 +63,12 @@ rate limiting, `X-Request-ID` request logging, health-check reachability
 reporting.
 
 Deps unique here: stdlib `sqlite3` (job store), `PTN` (season number only),
-an async HTTP client (`httpx`) for downstream fan-out.
+an async HTTP client (`httpx`) for downstream fan-out, and `medialab-contracts`
+(shared Pydantic models - `MediaType`, error shape, job/transfer DTOs).
+
+Engineering standards (root CLAUDE.md "Engineering standards") apply from the
+first commit: ruff lint+format, mypy gate, pre-commit, CI running
+lint -> typecheck -> test, Keep-a-Changelog, dependabot + pip-audit.
 
 ## Core architecture decisions (and why)
 
@@ -191,12 +196,22 @@ restart resumes from the last committed state.
 
 ## Cross-service changes this design requires
 
-Multi-repo change. Sequencing matters.
+Multi-repo change. Sequencing matters. (Full ordering in root CLAUDE.md
+roadmap - the two prerequisites below, engineering-standards backfill and
+`medialab-contracts`, precede the orchestrator there.)
 
-1. **torrent-downloader v1.2** (first - orchestrator depends on it):
-   - `POST /download` accepts `tmdb_id` alongside `media_type`.
+0a. **engineering-standards backfill** - ruff/mypy/pre-commit/CI-lint across all
+    services (+ medialab-bot's missing workflow), dependabot, Keep-a-Changelog.
+    Not orchestrator-specific but lands first; the orchestrator repo adopts all
+    standards from commit one. See root CLAUDE.md "Engineering standards".
+0b. **medialab-contracts** - shared Pydantic models (`MediaType`, error shape,
+    job/transfer DTOs). The orchestrator, torrent-downloader v1.2, and the bot
+    all import from it instead of redefining schemas. Stand up before v1.2.
+1. **torrent-downloader v1.2** (orchestrator depends on it):
+   - `POST /download` accepts `tmdb_id` alongside `media_type` (both from the
+     shared `medialab-contracts` `MediaType`).
    - cache `{media_type, host_path, tmdb_id}` vs hash.
-   - `GET /transfers/{hash}/info` returns `tmdb_id`.
+   - `GET /transfers/{hash}/info` returns `tmdb_id` (shared transfer-info DTO).
    - Additive, backward-compatible.
 2. **medialab-bot** (rewrite its client layer): point every call at the
    orchestrator instead of torrent-downloader; drop torrent-downloader +

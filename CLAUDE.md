@@ -16,6 +16,7 @@ medialab/
 ├── torrent-downloader/           (submodule - independent git repo)
 ├── medialab-bot/                 (submodule - independent git repo)
 ├── medialab-jellyfin/            (submodule - independent git repo)
+├── medialab-contracts/           (future submodule - shared Pydantic models)
 └── medialab-orchestrator/        (future submodule - not yet created)
 ```
 
@@ -44,6 +45,29 @@ downstream workers, never client-facing. Orchestrator owns a SQLite job table
 spanning search -> download -> seed-stop -> rename -> register -> scan.
 ```
 
+## Architecture style
+
+Named honestly (portfolio vocabulary): **orchestrated microservices behind an
+API gateway, with a persisted job state machine.** Concretely:
+
+- **Service-per-capability** - each service wraps one external system
+  (qBittorrent+TMDB, Jellyfin) or one client surface (Discord). Small-N (3-4),
+  service-oriented rather than fine-grained micro.
+- **API Gateway** - the orchestrator front-doors all bot traffic; downstream
+  services are never client-facing.
+- **Orchestration, not choreography** - a central coordinator drives the
+  workflow through an explicit job state machine (SQLite). No event bus.
+- **Event-triggered ingress at the tail** - the qBittorrent completion webhook
+  is the one event edge; everything else is request/response.
+- **Forward-retry saga** - the job table advances through idempotent steps and
+  retries forward on failure (no compensation/rollback).
+
+Deliberate restraint (the senior signal, stated so reviewers see intent):
+SQLite over Postgres, in-process asyncio worker over Celery/Redis, no message
+broker - each chosen as the lightest thing that fits single-host, low-volume
+scale. The scale-up path (broker-backed choreography, Postgres, external
+workers) is the documented "at 100x load" answer, not the MVP.
+
 ## Roadmap order
 
 1. **medialab-jellyfin library endpoints** - scan trigger, add path, item search.
@@ -51,12 +75,23 @@ spanning search -> download -> seed-stop -> rename -> register -> scan.
 2. **torrent-downloader v1.1** - `media_type`-based save path resolution.
    COMPLETE. PR merged, `media_type` on `POST /download` plus
    `GET /transfers/{torrent_hash}/info` live on main.
-3. **torrent-downloader v1.2** - thread `tmdb_id` through `POST /download`,
+3. **engineering-standards backfill** - bring existing services up to the
+   "Engineering standards" section below: add ruff config + lint/format CI
+   step to all three, add the missing **medialab-bot CI workflow** entirely,
+   add mypy/pyright gate, pre-commit configs, dependabot + pip-audit, enforce
+   Keep-a-Changelog format. Low-risk, parallelizable, strengthens every later
+   item. Can run alongside item 4.
+4. **medialab-contracts package** - shared Pydantic models (`MediaType`, error
+   shape, job/transfer DTOs). Stand it up before v1.2 touches schemas, so v1.2
+   consumes the shared `MediaType`/transfer-info model rather than re-defining
+   them. Own repo/submodule, pinned per consumer.
+5. **torrent-downloader v1.2** - thread `tmdb_id` through `POST /download`,
    cache `{media_type, host_path, tmdb_id}` vs hash, return `tmdb_id` from
-   `GET /transfers/{hash}/info`. Additive, backward-compatible. Hard
-   prerequisite for the orchestrator (it resolves canonical Title (Year) from
-   the cached tmdb_id, not by guessing the release name). Do first.
-4. **medialab-orchestrator MVP** - front-door orchestrating gateway, NOT a
+   `GET /transfers/{hash}/info`. Additive, backward-compatible. Consumes
+   `medialab-contracts` (item 4). Hard prerequisite for the orchestrator (it
+   resolves canonical Title (Year) from the cached tmdb_id, not by guessing the
+   release name).
+6. **medialab-orchestrator MVP** - front-door orchestrating gateway, NOT a
    post-download relay. Bot talks only to the orchestrator; it brokers
    search/download/status and the post-download pipeline, fanning out to
    torrent-downloader + medialab-jellyfin (both become downstream workers).
@@ -64,11 +99,11 @@ spanning search -> download -> seed-stop -> rename -> register -> scan.
    qBittorrent completion webhook via a relay script, shared media-dir volume
    for TV folder renames, `GET /jobs` observability. Core value prop.
    Full design: `medialab-orchestrator-spec.md` (frozen draft). Depends on
-   item 3. This MVP also absorbs the medialab-bot tech-debt cleanup below
-   (bot rewritten onto the single gateway dependency) and forces the root
+   item 5 (v1.2). This MVP also absorbs the medialab-bot tech-debt cleanup
+   below (bot rewritten onto the single gateway dependency) and forces the root
    `docker-compose.yml` (shared network + media mount) to land now.
-5. **medialab-bot Dockerfile** - so all services are containerized per Deployment.
-6. **medialab-setup CLI wizard** (new tool, not a microservice) - one-time
+7. **medialab-bot Dockerfile** - so all services are containerized per Deployment.
+8. **medialab-setup CLI wizard** (new tool, not a microservice) - one-time
    pre-deployment setup: collects TMDB/Jellyfin/qBittorrent API keys with
    guided instructions for obtaining each, creates/selects movie+TV
    directories, registers them as Jellyfin libraries, writes per-service
@@ -78,14 +113,14 @@ spanning search -> download -> seed-stop -> rename -> register -> scan.
    (defaults) and custom mode (every config value editable). Lives in its
    own directory/repo, run locally before containers exist - not a
    long-running service.
-7. **medialab-bot `/settings` cog** - runtime config viewing/editing via Discord
+9. **medialab-bot `/settings` cog** - runtime config viewing/editing via Discord
    slash commands (`/settings get`, `/settings set key value`), calling each
    service's settings endpoint (torrent-downloader already has
    `core/settings_manager.py` - check its current surface before designing this).
    Bot reports whether a changed setting hot-reloads or requires a container
    restart. No separate GUI - Discord is the existing user-facing surface.
 
-Items 6-7 are fast-follows after the MVP (1-5); do not block the MVP on them.
+Items 8-9 are fast-follows after the MVP (1-7); do not block the MVP on them.
 
 ## Session start - check submodule state
 
@@ -255,6 +290,63 @@ medialab-jellyfin) stay stateless proxies assuming their dependency is up.
 - No em dash character anywhere
 - No "Claude Code" or AI attribution in commit messages or code comments
   (exception: CLAUDE.md files and .claude/ directories)
+
+## Engineering standards
+
+Workspace-wide standards every service inherits. New services adopt all of
+these from their first commit; existing services backfill (see roadmap item
+"engineering-standards backfill").
+
+### Linting & formatting
+- **Ruff** is the single linter + formatter (`uv run ruff check`,
+  `uv run ruff format`). Config lives in each service's `pyproject.toml` under
+  `[tool.ruff]`, kept identical across services. Baseline rule set: `E`, `F`,
+  `I` (import sort), `UP` (pyupgrade), `B` (bugbear), `SIM` (simplify),
+  `PLR2004` (magic value used in comparison). The magic-number/-string ban is
+  enforced as the `PLR2004` lint rule, not left to review judgment - use named
+  constants/enums/config instead.
+- No separate `black`/`isort`/`flake8` - ruff replaces all three.
+
+### Static typing
+- Full type hints required (the code already has them). `mypy` (or `pyright`)
+  runs in CI as a gate. Config in `pyproject.toml`.
+
+### Pre-commit
+- `.pre-commit-config.yaml` in every service: ruff (check + format),
+  trailing-whitespace, end-of-file-fixer, and a local hook rejecting the em
+  dash character. Local gate before a commit reaches CI.
+
+### CI (GitHub Actions)
+- Every service has `.github/workflows/ci.yml` running, in order:
+  `ruff check` -> `ruff format --check` -> `mypy` -> `uv run pytest`
+  (with coverage). Tests-only CI is insufficient - lint + typecheck are gates.
+- **medialab-bot currently has no workflow** - add one (backfill).
+- Coverage reported; a floor is enforced once each service's suite is mature
+  (target documented per service, not a blanket number).
+- **Dependabot** (`.github/dependabot.yml`) for `uv`/pip + GitHub Actions
+  updates. **`pip-audit`** (or `uv`'s audit) step in CI for dependency CVEs.
+
+### Changelog
+- Keep a Changelog format (https://keepachangelog.com): `Unreleased` section
+  at top, grouped `Added`/`Changed`/`Fixed`/`Removed`, moved under a dated
+  `vX.Y.Z` heading at release time. All three current services already have a
+  `CHANGELOG.md` - enforce the format.
+
+### DRY with judgment
+- Extract a shared abstraction on the **third** real repetition, not the
+  second, and never abstract across **domain** boundaries purely to dedupe
+  (a coincidental code match in two services is not shared logic). Genuinely
+  shared cross-service contracts live in `medialab-contracts` (see below), not
+  copy-paste and not a forced base class. Prefer a little duplication over the
+  wrong abstraction.
+
+### Shared contracts (`medialab-contracts`)
+- A small versioned package of Pydantic models shared across services
+  (`MediaType`, the structured error shape, job/transfer DTOs, common enums).
+  Single source of truth - editing a shared field happens once, not in three
+  schemas. Each service depends on a pinned version; bumping it is a
+  deliberate, reviewable step. Prevents schema drift as the surface grows.
+  Lives in its own repo/submodule like the services.
 
 ## Git workflow
 
