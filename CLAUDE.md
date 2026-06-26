@@ -106,10 +106,24 @@ workers) is the documented "at 100x load" answer, not the MVP.
    SQLite job table spanning the full lifecycle, in-process asyncio worker,
    qBittorrent completion webhook via a relay script, shared media-dir volume
    for TV folder renames, `GET /jobs` observability. Core value prop.
-   Full design: `medialab-orchestrator-spec.md` (frozen draft). Depends on
-   item 5 (v1.2). This MVP also absorbs the medialab-bot tech-debt cleanup
+   Full design now lives in `medialab-orchestrator/CLAUDE.md` (the frozen-draft
+   spec was folded in at build time and removed). Depends on item 5 (v1.2). This MVP also absorbs the medialab-bot tech-debt cleanup
    below (bot rewritten onto the single gateway dependency) and forces the root
    `docker-compose.yml` (shared network + media mount) to land now.
+   **SERVICE COMPLETE (2026-06-26), released v0.1.0, submodule live + root
+   pinned.** Repo + submodule created (public, branch-protected on the `quality`
+   CI check, matching the other services). Ships the full gateway surface
+   (search proxies, `POST /download`, `GET /transfers` read-through merge,
+   `GET/POST /jobs*`, `GET /storage`, public aggregated health), the SQLite
+   `pipeline_job` store, the forward-retry asyncio worker, the keyed
+   `POST /webhooks/torrent-complete` + `scripts/notify_complete.py` relay, and
+   the PTN-season-only TV rename. Standards from commit one; consumes
+   `medialab-contracts` v0.2.0. Root `docker-compose.yml` + README landed.
+   Implementation decisions resolved from the spec's open questions: webhook is
+   keyed, DOWNLOADING is a read-through (no polling), PTN parses season only.
+   **Still outstanding under this item: the medialab-bot rewrite onto the
+   gateway** (drop torrent-downloader/jellyfin URLs+keys, save-path config, the
+   direct health check) - the gateway it targets now exists; sequence it next.
 7. **medialab-bot Dockerfile** - so all services are containerized per Deployment.
 8. **medialab-setup CLI wizard** (new tool, not a microservice) - one-time
    pre-deployment setup: collects TMDB/Jellyfin/qBittorrent API keys with
@@ -226,15 +240,20 @@ shape, rate limiting, `X-Request-ID` tracing, `hatch-vcs` versioning.
 Stays a thin proxy - assumes Jellyfin already reachable. No power-management
 or workflow logic here; that belongs to the orchestrator.
 
-### medialab-orchestrator (future)
+### medialab-orchestrator (v0.1.0 - complete)
 
-> **Design superseded - see `medialab-orchestrator-spec.md` (frozen draft,
-> 2026-06-26) for the current design.** The orchestrator is now a **front-door
-> orchestrating gateway** (bot talks only to it; it fronts the whole lifecycle
-> and owns a SQLite job table), not the post-download-only relay the notes
-> below describe. The notes below are retained for the TV-folder-naming and
-> Jellyfin-availability detail still referenced by the spec; treat the spec as
-> the source of truth where they conflict.
+Front-door orchestrating gateway. GitHub:
+https://github.com/MickMarch/medialab-orchestrator (public, branch-protected).
+
+> **Source of truth is `medialab-orchestrator/CLAUDE.md`.** The full design
+> (gateway surface, SQLite `pipeline_job` lifecycle, idempotency rules, the
+> resolved implementation decisions) lives there; the frozen-draft spec was
+> folded in at build time and the standalone spec file removed. The orchestrator
+> is a **front-door orchestrating gateway** - the bot talks only to it; it fronts
+> the whole lifecycle and owns the job table - not the post-download-only relay
+> the historical notes below describe. The notes below are retained only for the
+> TV-folder-naming and Jellyfin-availability detail; the service CLAUDE.md wins
+> where they conflict.
 
 Add when event-driven cross-service workflows are needed. Owns:
 

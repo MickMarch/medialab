@@ -1,0 +1,81 @@
+# medialab workspace compose.
+#
+# All services run as containers on one shared network and reach host-installed
+# apps (qBittorrent, Jellyfin) over host.docker.internal. Each service keeps its
+# own .env (per-service env_file below) - there is no shared service .env. The
+# one value compose itself interpolates is MEDIA_HOST_DIR (the host media root
+# bind-mounted into the services that touch files); set it in a root .env or the
+# shell environment. See medialab-setup (roadmap item 8) for guided setup.
+
+name: medialab
+
+services:
+  torrent-downloader:
+    build:
+      context: ./torrent-downloader
+    image: medialab/torrent-downloader
+    env_file:
+      - ./torrent-downloader/.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - medialab
+    restart: unless-stopped
+
+  medialab-jellyfin:
+    build:
+      context: ./medialab-jellyfin
+    image: medialab/medialab-jellyfin
+    env_file:
+      - ./medialab-jellyfin/.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - medialab
+    restart: unless-stopped
+
+  medialab-orchestrator:
+    build:
+      context: ./medialab-orchestrator
+    image: medialab/medialab-orchestrator
+    env_file:
+      - ./medialab-orchestrator/.env
+    ports:
+      # The only client-facing surface: the bot talks to the gateway.
+      - "8000:8000"
+    volumes:
+      # Shared media volume: the orchestrator renames TV folders through this
+      # mount (MEDIA_MOUNT_PATH=/media in its .env). qBittorrent on the host
+      # writes the same dir, so the container path mirrors the host layout.
+      - "${MEDIA_HOST_DIR}:/media"
+      # Persist the SQLite job store across restarts.
+      - "orchestrator-data:/app/data"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - torrent-downloader
+      - medialab-jellyfin
+    networks:
+      - medialab
+    restart: unless-stopped
+
+  # medialab-bot is enabled once it has a Dockerfile and is rewritten onto the
+  # gateway (roadmap items 6-7). Until then it has no build context to compose.
+  # medialab-bot:
+  #   build:
+  #     context: ./medialab-bot
+  #   image: medialab/medialab-bot
+  #   env_file:
+  #     - ./medialab-bot/.env
+  #   depends_on:
+  #     - medialab-orchestrator
+  #   networks:
+  #     - medialab
+  #   restart: unless-stopped
+
+networks:
+  medialab:
+    driver: bridge
+
+volumes:
+  orchestrator-data:
