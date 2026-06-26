@@ -10,3 +10,6 @@
 [submodule "medialab-contracts"]
 	path = medialab-contracts
 	url = https://github.com/MickMarch/medialab-contracts.git
+[submodule "medialab-orchestrator"]
+	path = medialab-orchestrator
+	url = https://github.com/MickMarch/medialab-orchestrator.git
