@@ -121,9 +121,12 @@ workers) is the documented "at 100x load" answer, not the MVP.
    `medialab-contracts` v0.2.0. Root `docker-compose.yml` + README landed.
    Implementation decisions resolved from the spec's open questions: webhook is
    keyed, DOWNLOADING is a read-through (no polling), PTN parses season only.
-   **Still outstanding under this item: the medialab-bot rewrite onto the
-   gateway** (drop torrent-downloader/jellyfin URLs+keys, save-path config, the
-   direct health check) - the gateway it targets now exists; sequence it next.
+   **ITEM 6 COMPLETE: the medialab-bot rewrite onto the gateway also landed**
+   (bot PR #15) - the bot now talks only to the orchestrator, dropped the
+   torrent-downloader/jellyfin URLs+keys, save-path config, and the direct
+   health check; `/torrent` removed, `/jobs` added, `tmdb_id`+`media_type`
+   threaded through download. Root pin bumped. The first whole-project
+   `docker compose build` + live verify is the user's next step.
 7. **medialab-bot Dockerfile** - so all services are containerized per Deployment.
 8. **medialab-setup CLI wizard** (new tool, not a microservice) - one-time
    pre-deployment setup: collects TMDB/Jellyfin/qBittorrent API keys with
@@ -197,25 +200,28 @@ v1.2 roadmap (not yet built):
 - `GET /api/v1/search/trending?type=movie|show&window=day|week`
 - `GET /api/v1/search/similar?tmdb_id=123&type=movie|show`
 
-### medialab-bot (not yet started)
+### medialab-bot (v1.0.0 shipped; rewired onto the gateway)
 
-Discord bot. Tech stack: `discord.py`, `uv`, `hatchling + hatch-vcs`, `pydantic-settings`.
+Discord bot. Tech stack: `discord.py`, `uv`, `hatchling + hatch-vcs`,
+`pydantic-settings`, `medialab-contracts`. Full design in
+`medialab-bot/CLAUDE.md`.
 
-Slash commands planned:
-- `/search query type` - TMDB search, present results as Discord embed + select menu
-- `/torrent query` - skip TMDB, go straight to torrent search
-- `/download` - confirm and submit selected magnet
-- `/transfers` - list active downloads
+**Talks only to the medialab-orchestrator gateway** (one URL + one key, no
+placement config) since the item-6 rewrite (bot PR #15). Live slash commands:
+- `/search query` - TMDB search via the gateway; the **sole download path**. The
+  picked `tmdb_id` + `media_type` thread through the torrent-resolution pick into
+  `POST /download` (the gateway requires both and does no title guessing).
+- `/transfers` - live transfers merged with pipeline job rows
 - `/storage` - disk usage
-- `/trending type` - trending movies or shows (requires torrent-downloader v1.2)
-- `/similar title type` - similar titles (requires torrent-downloader v1.2)
+- `/jobs [status]` - pipeline lifecycle view with a retry control for failed jobs
 
-Multi-step flow: user picks TMDB result via Discord Select component, then picks torrent
-resolution, then confirms download. State lives in Discord message components - no
-server-side session needed.
+`/torrent` was removed (could not supply `tmdb_id`+`media_type`). `/trending` +
+`/similar` stay deferred until the gateway proxies torrent-downloader's TMDB
+roadmap. State lives in Discord message components - no server-side session.
 
-Roadmap: needs a Dockerfile (none yet) per the Deployment section below - mirror
-torrent-downloader's two-stage uv install pattern, non-root user, hatch-vcs
+Roadmap: still needs a Dockerfile (none yet, item 7) per the Deployment section
+below - mirror torrent-downloader's two-stage uv install pattern, non-root user,
+hatch-vcs
 APP_VERSION build arg.
 
 Tech debt in this service to resolve when orchestrator is built - see
