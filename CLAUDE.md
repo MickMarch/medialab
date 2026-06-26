@@ -128,6 +128,11 @@ workers) is the documented "at 100x load" answer, not the MVP.
    threaded through download. Root pin bumped. The first whole-project
    `docker compose build` + live verify is the user's next step.
 7. **medialab-bot Dockerfile** - so all services are containerized per Deployment.
+   COMPLETE (2026-06-26). Dockerfile + .dockerignore merged (bot PR #16),
+   two-stage uv with git for the contracts git-ref dep, non-root, no EXPOSE
+   (outbound-only client). Root pin bumped and the compose `medialab-bot`
+   service enabled. All four services are now Docker images. Next: the user's
+   first whole-project `docker compose build` + live verification.
 8. **medialab-setup CLI wizard** (new tool, not a microservice) - one-time
    pre-deployment setup: collects TMDB/Jellyfin/qBittorrent API keys with
    guided instructions for obtaining each, creates/selects movie+TV
@@ -219,10 +224,10 @@ placement config) since the item-6 rewrite (bot PR #15). Live slash commands:
 `/similar` stay deferred until the gateway proxies torrent-downloader's TMDB
 roadmap. State lives in Discord message components - no server-side session.
 
-Roadmap: still needs a Dockerfile (none yet, item 7) per the Deployment section
-below - mirror torrent-downloader's two-stage uv install pattern, non-root user,
-hatch-vcs
-APP_VERSION build arg.
+Containerized (item 7 complete): Dockerfile + .dockerignore mirror the other
+services' two-stage uv install (git in the build stage for the contracts git-ref
+dep, non-root user, hatch-vcs `APP_VERSION` build arg, no `EXPOSE`). Enabled in
+the root `docker-compose.yml`.
 
 Tech debt in this service to resolve when orchestrator is built - see
 "medialab-bot tech debt" under medialab-orchestrator below.
