@@ -70,6 +70,14 @@ Engineering standards (root CLAUDE.md "Engineering standards") apply from the
 first commit: ruff lint+format, mypy gate, pre-commit, CI running
 lint -> typecheck -> test, Keep-a-Changelog, dependabot + pip-audit.
 
+CI test isolation (root standard) applies: tests pass with no `.env` and no
+network. Orchestrator-specific wrinkle - the SQLite job table: tests use a
+temp/in-memory DB via a fixture (`DB_PATH` pointed at `tmp_path` or
+`:memory:`), never a real DB file; downstream HTTP calls (torrent-downloader,
+medialab-jellyfin) are mocked at the client boundary; the qBittorrent
+completion webhook is exercised by posting to the endpoint directly, no live
+qBittorrent.
+
 ## Core architecture decisions (and why)
 
 1. **Front-door gateway** (above) - one client-facing surface, downstream

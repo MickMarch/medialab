@@ -340,6 +340,37 @@ these from their first commit; existing services backfill (see roadmap item
   copy-paste and not a forced base class. Prefer a little duplication over the
   wrong abstraction.
 
+### Tests must run without `.env` (CI isolation)
+
+CI runs on GitHub Actions with **no `.env` file and no real secrets**. Tests
+that depend on real config or live external services fail there as false
+negatives. Mitigation (already the pattern in medialab-jellyfin /
+torrent-downloader - keep it uniform):
+
+1. **Config defaults everywhere.** Every `pydantic-settings` field has a
+   default (`None` for secrets, sensible literals otherwise) so the app
+   imports cleanly with no `.env` present. Fields are "optional at import time,
+   required at runtime" - never make a field mandatory at import or CI import
+   fails before a test even runs.
+2. **Unit tests never read real config.** `conftest.py` uses `autouse=True`
+   fixtures to patch the config object (e.g. mock `core.auth.config` with a
+   `TEST_API_KEY` constant). Tests assert against the injected test value, not
+   a real key.
+3. **External dependencies are mocked.** No unit test makes a real network call
+   (qBittorrent, TMDB, Jellyfin, Discord, the downstream services). Mock at the
+   client-class boundary (see the Discord-mocking convention), not at
+   `httpx` internals, except in the dedicated client test module.
+4. **Live-credential tests are marked and skipped.** Anything that genuinely
+   needs real secrets or a live service is marked
+   `@pytest.mark.integration` and skipped in CI (run only locally with a real
+   `.env`). CI runs the default (non-integration) suite. Register the
+   `integration` marker in `pyproject.toml` so it is not an unknown-marker
+   warning.
+
+Net rule: a fresh checkout with zero `.env` and no network must pass
+`uv run pytest` green. If a test needs a secret or a live endpoint to pass,
+it is either mis-scoped (mock it) or an integration test (mark + skip).
+
 ### Shared contracts (`medialab-contracts`)
 - A small versioned package of Pydantic models shared across services
   (`MediaType`, the structured error shape, job/transfer DTOs, common enums).
