@@ -313,8 +313,9 @@ these from their first commit; existing services backfill (see roadmap item
 
 ### Pre-commit
 - `.pre-commit-config.yaml` in every service: ruff (check + format),
-  trailing-whitespace, end-of-file-fixer, and a local hook rejecting the em
-  dash character. Local gate before a commit reaches CI.
+  trailing-whitespace, end-of-file-fixer, yaml/toml checks. Local gate before
+  a commit reaches CI. (The em-dash prohibition is an assistant authoring rule,
+  not a pre-commit gate - do not add a hook for it.)
 
 ### CI (GitHub Actions)
 - Every service has `.github/workflows/ci.yml` running, in order:
@@ -324,7 +325,11 @@ these from their first commit; existing services backfill (see roadmap item
 - Coverage reported; a floor is enforced once each service's suite is mature
   (target documented per service, not a blanket number).
 - **Dependabot** (`.github/dependabot.yml`) for `uv`/pip + GitHub Actions
-  updates. **`pip-audit`** (or `uv`'s audit) step in CI for dependency CVEs.
+  updates. **`pip-audit`** step in CI for dependency CVEs - audit the resolved
+  project deps (`uv export ... | pip-audit -r`), not a bare `uvx pip-audit`
+  (which audits only the isolated tool env and finds nothing useful).
+  Unfixable CVEs are ignored by explicit ID with a comment, not by dropping the
+  gate.
 
 ### Changelog
 - Keep a Changelog format (https://keepachangelog.com): `Unreleased` section
