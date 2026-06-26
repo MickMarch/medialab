@@ -59,19 +59,17 @@ services:
       - medialab
     restart: unless-stopped
 
-  # medialab-bot is enabled once it has a Dockerfile and is rewritten onto the
-  # gateway (roadmap items 6-7). Until then it has no build context to compose.
-  # medialab-bot:
-  #   build:
-  #     context: ./medialab-bot
-  #   image: medialab/medialab-bot
-  #   env_file:
-  #     - ./medialab-bot/.env
-  #   depends_on:
-  #     - medialab-orchestrator
-  #   networks:
-  #     - medialab
-  #   restart: unless-stopped
+  medialab-bot:
+    build:
+      context: ./medialab-bot
+    image: medialab/medialab-bot
+    env_file:
+      - ./medialab-bot/.env
+    depends_on:
+      - medialab-orchestrator
+    networks:
+      - medialab
+    restart: unless-stopped
 
 networks:
   medialab:
