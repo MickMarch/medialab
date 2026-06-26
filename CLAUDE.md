@@ -26,14 +26,22 @@ medialab-bot (discord.py)
     | HTTP + X-API-Key
 torrent-downloader (FastAPI) ---- qBittorrent + TMDB (host)
 
-Future (when orchestrator built):
-medialab-bot ---------------------------------> torrent-downloader -> qBittorrent (host)
-                                                        |
-qBittorrent (host, run-on-completion script)           |
-    | webhook (torrent finished)                       |
-    v                                                   v
-medialab-orchestrator ----------------------------> medialab-jellyfin -> Jellyfin (host)
-    (stop seeding, add path, trigger scan)
+Future (front-door gateway - orchestrator owns the whole lifecycle):
+Discord user
+    | slash command
+medialab-bot ----------------> medialab-orchestrator --+--> torrent-downloader -> qBittorrent + TMDB (host)
+   (one dependency)                    | (gateway)      |
+                                       |                +--> medialab-jellyfin   -> Jellyfin (host)
+                                       |
+qBittorrent (host, run-on-completion script)
+    | webhook (torrent finished)      |
+    v                                 v
+scripts/notify_complete.py --> medialab-orchestrator (advances job: stop-seed, resolve TMDB,
+                                rename TV folder, register path, trigger scan)
+
+Bot talks ONLY to orchestrator. torrent-downloader + medialab-jellyfin become
+downstream workers, never client-facing. Orchestrator owns a SQLite job table
+spanning search -> download -> seed-stop -> rename -> register -> scan.
 ```
 
 ## Roadmap order
@@ -43,11 +51,24 @@ medialab-orchestrator ----------------------------> medialab-jellyfin -> Jellyfi
 2. **torrent-downloader v1.1** - `media_type`-based save path resolution.
    COMPLETE. PR merged, `media_type` on `POST /download` plus
    `GET /transfers/{torrent_hash}/info` live on main.
-3. **medialab-orchestrator MVP** - download-complete webhook -> stop-seeding +
-   Jellyfin add-path/scan. Unblocked now that torrent-downloader v1.1 ships
-   media_type lookup by hash. Core value prop. Up next.
-4. **medialab-bot Dockerfile** - so all services are containerized per Deployment.
-5. **medialab-setup CLI wizard** (new tool, not a microservice) - one-time
+3. **torrent-downloader v1.2** - thread `tmdb_id` through `POST /download`,
+   cache `{media_type, host_path, tmdb_id}` vs hash, return `tmdb_id` from
+   `GET /transfers/{hash}/info`. Additive, backward-compatible. Hard
+   prerequisite for the orchestrator (it resolves canonical Title (Year) from
+   the cached tmdb_id, not by guessing the release name). Do first.
+4. **medialab-orchestrator MVP** - front-door orchestrating gateway, NOT a
+   post-download relay. Bot talks only to the orchestrator; it brokers
+   search/download/status and the post-download pipeline, fanning out to
+   torrent-downloader + medialab-jellyfin (both become downstream workers).
+   SQLite job table spanning the full lifecycle, in-process asyncio worker,
+   qBittorrent completion webhook via a relay script, shared media-dir volume
+   for TV folder renames, `GET /jobs` observability. Core value prop.
+   Full design: `medialab-orchestrator-spec.md` (frozen draft). Depends on
+   item 3. This MVP also absorbs the medialab-bot tech-debt cleanup below
+   (bot rewritten onto the single gateway dependency) and forces the root
+   `docker-compose.yml` (shared network + media mount) to land now.
+5. **medialab-bot Dockerfile** - so all services are containerized per Deployment.
+6. **medialab-setup CLI wizard** (new tool, not a microservice) - one-time
    pre-deployment setup: collects TMDB/Jellyfin/qBittorrent API keys with
    guided instructions for obtaining each, creates/selects movie+TV
    directories, registers them as Jellyfin libraries, writes per-service
@@ -57,14 +78,14 @@ medialab-orchestrator ----------------------------> medialab-jellyfin -> Jellyfi
    (defaults) and custom mode (every config value editable). Lives in its
    own directory/repo, run locally before containers exist - not a
    long-running service.
-6. **medialab-bot `/settings` cog** - runtime config viewing/editing via Discord
+7. **medialab-bot `/settings` cog** - runtime config viewing/editing via Discord
    slash commands (`/settings get`, `/settings set key value`), calling each
    service's settings endpoint (torrent-downloader already has
    `core/settings_manager.py` - check its current surface before designing this).
    Bot reports whether a changed setting hot-reloads or requires a container
    restart. No separate GUI - Discord is the existing user-facing surface.
 
-Items 5-6 are fast-follows after the MVP (1-4); do not block the MVP on them.
+Items 6-7 are fast-follows after the MVP (1-5); do not block the MVP on them.
 
 ## Session start - check submodule state
 
@@ -163,6 +184,14 @@ Stays a thin proxy - assumes Jellyfin already reachable. No power-management
 or workflow logic here; that belongs to the orchestrator.
 
 ### medialab-orchestrator (future)
+
+> **Design superseded - see `medialab-orchestrator-spec.md` (frozen draft,
+> 2026-06-26) for the current design.** The orchestrator is now a **front-door
+> orchestrating gateway** (bot talks only to it; it fronts the whole lifecycle
+> and owns a SQLite job table), not the post-download-only relay the notes
+> below describe. The notes below are retained for the TV-folder-naming and
+> Jellyfin-availability detail still referenced by the spec; treat the spec as
+> the source of truth where they conflict.
 
 Add when event-driven cross-service workflows are needed. Owns:
 
