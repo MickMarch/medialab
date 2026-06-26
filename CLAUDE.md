@@ -16,7 +16,7 @@ medialab/
 ├── torrent-downloader/           (submodule - independent git repo)
 ├── medialab-bot/                 (submodule - independent git repo)
 ├── medialab-jellyfin/            (submodule - independent git repo)
-├── medialab-contracts/           (future submodule - shared Pydantic models)
+├── medialab-contracts/           (submodule - shared Pydantic models, v0.1.0)
 └── medialab-orchestrator/        (future submodule - not yet created)
 ```
 
@@ -84,9 +84,13 @@ workers) is the documented "at 100x load" answer, not the MVP.
    by ID pending a fix). Root pins bumped. PRs: torrent-downloader #4,
    medialab-bot #11, medialab-jellyfin #2.
 4. **medialab-contracts package** - shared Pydantic models (`MediaType`, error
-   shape, job/transfer DTOs). Stand it up before v1.2 touches schemas, so v1.2
-   consumes the shared `MediaType`/transfer-info model rather than re-defining
-   them. Own repo/submodule, pinned per consumer.
+   shape, job/transfer DTOs). COMPLETE (2026-06-26). Repo + submodule live,
+   released **v0.1.0**, root pinned. Ships `MediaType` enum, `ErrorResponse`,
+   `CommonErrorCode` (six shared codes; services extend), `TransferInfo`,
+   `TransferHashInfo` (optional `tmdb_id` for v1.2). Consumed as a tag-pinned
+   uv git dependency (`[tool.uv.sources]` git + tag). Full design:
+   `medialab-contracts-spec.md`. Service migration folds torrent-downloader's
+   into v1.2; jellyfin + bot follow opportunistically.
 5. **torrent-downloader v1.2** - thread `tmdb_id` through `POST /download`,
    cache `{media_type, host_path, tmdb_id}` vs hash, return `tmdb_id` from
    `GET /transfers/{hash}/info`. Additive, backward-compatible. Consumes

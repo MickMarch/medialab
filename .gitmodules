@@ -7,3 +7,6 @@
 [submodule "medialab-jellyfin"]
 	path = medialab-jellyfin
 	url = https://github.com/MickMarch/medialab-jellyfin.git
+[submodule "medialab-contracts"]
+	path = medialab-contracts
+	url = https://github.com/MickMarch/medialab-contracts.git
