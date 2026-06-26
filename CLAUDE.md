@@ -93,10 +93,12 @@ workers) is the documented "at 100x load" answer, not the MVP.
    into v1.2; jellyfin + bot follow opportunistically.
 5. **torrent-downloader v1.2** - thread `tmdb_id` through `POST /download`,
    cache `{media_type, host_path, tmdb_id}` vs hash, return `tmdb_id` from
-   `GET /transfers/{hash}/info`. Additive, backward-compatible. Consumes
-   `medialab-contracts` (item 4). Hard prerequisite for the orchestrator (it
-   resolves canonical Title (Year) from the cached tmdb_id, not by guessing the
-   release name).
+   `GET /transfers/{hash}/info`. COMPLETE (2026-06-26), released **v1.2.0**,
+   root pinned. `tmdb_id` required end to end (no backward-compat needed
+   pre-release). Migrated onto `medialab-contracts` v0.2.0 (shared `MediaType`,
+   `ErrorResponse`, `TransferInfo`, `TransferHashInfo`; `ErrorCode` bases its
+   shared members on `CommonErrorCode`). Unblocks the orchestrator's canonical
+   Title (Year) resolution.
 6. **medialab-orchestrator MVP** - front-door orchestrating gateway, NOT a
    post-download relay. Bot talks only to the orchestrator; it brokers
    search/download/status and the post-download pipeline, fanning out to
