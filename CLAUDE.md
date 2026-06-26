@@ -76,11 +76,13 @@ workers) is the documented "at 100x load" answer, not the MVP.
    COMPLETE. PR merged, `media_type` on `POST /download` plus
    `GET /transfers/{torrent_hash}/info` live on main.
 3. **engineering-standards backfill** - bring existing services up to the
-   "Engineering standards" section below: add ruff config + lint/format CI
-   step to all three, add the missing **medialab-bot CI workflow** entirely,
-   add mypy/pyright gate, pre-commit configs, dependabot + pip-audit, enforce
-   Keep-a-Changelog format. Low-risk, parallelizable, strengthens every later
-   item. Can run alongside item 4.
+   "Engineering standards" section below. COMPLETE (2026-06-26). All three
+   services merged ruff + mypy + pre-commit + dependabot + full CI gate
+   (lint/format/typecheck/test/project-dep audit); medialab-bot gained its
+   first CI workflow. CVEs surfaced by the audit cleared (bumped
+   starlette/pydantic-settings/idna/aiohttp; diskcache CVE-2025-69872 ignored
+   by ID pending a fix). Root pins bumped. PRs: torrent-downloader #4,
+   medialab-bot #11, medialab-jellyfin #2.
 4. **medialab-contracts package** - shared Pydantic models (`MediaType`, error
    shape, job/transfer DTOs). Stand it up before v1.2 touches schemas, so v1.2
    consumes the shared `MediaType`/transfer-info model rather than re-defining
