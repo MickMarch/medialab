@@ -152,6 +152,68 @@ workers) is the documented "at 100x load" answer, not the MVP.
 
 Items 8-9 are fast-follows after the MVP (1-7); do not block the MVP on them.
 
+### Backlog (added 2026-06-29, unordered - sized but not yet sequenced)
+
+10. **Stuck / failed download remediation.** Detect and recover downloads that
+    stall, error, or go corrupt in qBittorrent (stalled, missing files, metadata
+    timeout, error state). torrent-downloader already exposes per-transfer
+    `state` via `GET /transfers`; the orchestrator should surface unhealthy
+    transfers (a new job signal or a derived `STALLED`/`ERRORED` view) and offer
+    a remedy - re-announce, recheck, re-add, or cancel-and-cleanup - via a bot
+    command. Touches the orchestrator job state machine + a bot surface. Decide:
+    a new job status vs. a derived health flag joined onto the live read.
+    Medium.
+11. **Full Jellyfin naming convention.** The orchestrator's RENAME step already
+    does TV `Series Name (Year)/Season NN/`. Extend to Jellyfin's complete spec
+    for both libraries so Jellyfin's own tooling (metadata match, versions,
+    editions) works cleanly. Movies:
+    `Movie (Year)/Movie (Year) [tags].ext` (see
+    https://jellyfin.org/docs/general/server/media/movies). Shows: episode-level
+    naming `Series (Year)/Season NN/Series SNNEMM.ext` and specials handling
+    (see https://jellyfin.org/docs/general/server/media/shows). Currently movies
+    get no rename and TV stops at the season-folder level. Refines the existing
+    `services/rename.py`; PTN already parses episode/season. Small-medium.
+12. **RSS watchlist + auto-download.** A user adds a show or movie to a watchlist;
+    the app monitors RSS feeds for matching releases and auto-downloads the first
+    that meets a target resolution (and other filters). Biggest item - needs a
+    persistent watchlist store, a periodic feed-poll loop, release-name matching
+    (PTN + the TMDB id already threaded), and an auto-submit into the existing
+    download pipeline. Likely its own subsystem or service rather than bolted
+    onto the gateway; the orchestrator's in-process asyncio worker is a natural
+    host for the poll loop, but the watchlist is new persisted state. Per-show
+    resolution/quality filters tie into the settings store (item 9). Large;
+    spec-first, sequence after the remediation + naming items.
+13. **`/stop-seeding` bot command.** Surface torrent-downloader's existing
+    `POST /transfers/stop-seeding` through the gateway and a bot command. That
+    endpoint already stops only *seeding* (i.e. completed) torrents and never
+    touches in-progress downloads, so the "completed only" requirement is the
+    current behaviour - this is mostly wiring: gateway passthrough + a
+    `/stop-seeding` cog command. Small.
+14. **Storage-threshold warning.** Before confirming a download, warn the user if
+    it would push disk usage past a user-set threshold. torrent-downloader
+    already exposes `GET /storage`; the gateway compares projected size against
+    the threshold and the bot surfaces the warning at the confirm step. The
+    threshold is a user-adjustable setting, so this depends on the settings
+    surface (item 9). Small-medium.
+15. **Rename `torrent-downloader` -> `medialab-downloader`.** Align the naming
+    with the rest of the suite. Wide but mechanical blast radius: GitHub repo
+    rename, the Python package (`torrent_downloader` -> `medialab_downloader`),
+    the submodule path + `.gitmodules` URL, the image name in
+    `docker-compose.yml`, every consumer's downstream URL/service-name
+    (orchestrator + the compose network), the contracts/CLAUDE references, and
+    the memory notes. Do it as a single focused chore with all consumers updated
+    in lockstep (the orchestrator targets it by compose service name, so the
+    service rename and the orchestrator `.env`/compose update must land
+    together). Note: keeping the historical "torrent-downloader" name is also
+    defensible (it names what the service *does*); the rename is cosmetic
+    alignment, low priority. Mechanical, medium blast radius.
+
+Items 10-15 are unsequenced backlog. Rough natural order if tackled: 13 (small,
+isolated) -> 11 (refines existing rename) -> 10 (remediation) -> 14 (needs
+settings) -> 12 (large, depends on watchlist store) -> 15 (cosmetic, do when
+quiet). 14 and the per-show filters in 12 both want item 9's settings store, so
+9 is a soft prerequisite for them.
+
 ## Session start - check submodule state
 
 Run this at the start of every session to see which services have changed since last pinned:
