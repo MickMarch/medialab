@@ -208,11 +208,74 @@ Items 8-9 are fast-follows after the MVP (1-7); do not block the MVP on them.
     defensible (it names what the service *does*); the rename is cosmetic
     alignment, low priority. Mechanical, medium blast radius.
 
-Items 10-15 are unsequenced backlog. Rough natural order if tackled: 13 (small,
-isolated) -> 11 (refines existing rename) -> 10 (remediation) -> 14 (needs
-settings) -> 12 (large, depends on watchlist store) -> 15 (cosmetic, do when
-quiet). 14 and the per-show filters in 12 both want item 9's settings store, so
-9 is a soft prerequisite for them.
+16. **Wire the qBittorrent completion webhook (job pipeline advance).** The
+    orchestrator's post-download pipeline (STOP_SEEDING -> RESOLVE_META -> RENAME
+    -> REGISTER -> SCAN -> DONE) only advances when qBittorrent runs
+    `scripts/notify_complete.py` on torrent completion, POSTing to
+    `/webhooks/torrent-complete`. That hook is not configured, so every job sits
+    at `DOWNLOAD_SUBMITTED` forever even after the download finishes (observed
+    live via `/jobs`). The relay script and endpoint already exist - this is
+    deployment wiring: configure qBittorrent's "Run external program on torrent
+    completion" to invoke the relay with `%I`/`%N` and the orchestrator URL+key,
+    inside the container topology. Decide the relay's runtime home (qBittorrent
+    runs on the host, the script needs network to the gateway). This is the
+    automation keystone - without it the pipeline never runs end to end. A poll
+    fallback (orchestrator polls `/transfers`, advances on completion) is the
+    documented alternative if the host hook is impractical; the spec chose
+    webhook-over-poll but a poll is the pragmatic homelab option. Medium; high
+    priority (unblocks the whole post-download flow).
+17. **Show torrent download size in the picker.** The bot's resolution picker
+    shows seeder count but not size. torrent-downloader's torrent search already
+    returns `fileSize`; the bot's `TorrentResult` already carries `file_size`.
+    Just surface it (human-readable GB/MB) in the Select option description next
+    to seeders, so the user weighs size vs. seeders when choosing. Bot-only,
+    ~no new data. Small; quick win.
+
+18. **Uptime / autostart the whole stack.** Maximize availability so the remote
+    Discord control surface is always reachable. Two layers: (a) **containers** -
+    the compose services already declare `restart: unless-stopped` (survive
+    crashes and Docker-daemon restarts), but the Docker runtime itself must
+    launch on host boot (Docker Desktop "start on login", or a boot-managed
+    engine); document/configure it. (b) **host apps** - qBittorrent and Jellyfin
+    run on the host, not in containers, so their autostart is a host concern
+    (Windows startup / Task Scheduler / run-as-service). This overlaps the
+    orchestrator spec's deferred "Jellyfin host availability" note (power-on /
+    WoL / smart-plug when the host is asleep) - fold that in here. Define what
+    "the stack is up" means and make each layer self-start. Mostly
+    config + docs + a host-app autostart recipe; the WoL/wake piece is larger if
+    pursued. Medium; do alongside or just after the webhook (16), since an
+    always-on pipeline needs an always-on stack.
+
+### Backlog ordering (agreed 2026-06-29)
+
+The backlog items above are numbered by when they were raised, not by priority.
+Execution order:
+
+1. **16 - wire the qBittorrent completion webhook.** Do next, immediately. Not a
+   feature - the post-download pipeline never runs end to end without it, so the
+   whole orchestration value is untested live. Treat as a blocker.
+2. **18 - uptime / autostart.** Pair with 16: an always-on pipeline needs an
+   always-on stack (containers on boot + host apps up).
+3. **17 - show torrent size**, then **13 - `/stop-seeding` command.** Two small,
+   isolated quick wins to clear after the keystone.
+4. **Reliability: 11 - full Jellyfin naming**, then **10 - stuck/failed
+   remediation.** Make the core loop correctly organized and robust before
+   adding features. (11 refines the existing rename step; 10 hardens it.)
+5. **Setup polish: 9 - `/settings` cog**, then **14 - storage-threshold
+   warning** (14 depends on 9's settings store), then **8 - medialab-setup
+   wizard.** Build 8 before sharing the project / portfolio use - it owns the
+   config-duplication chore ([[chore_config_layout]]) and makes the suite
+   installable by others. Not urgent for personal use (working `.env` files
+   already exist).
+6. **12 - RSS watchlist + auto-download.** The marquee feature and the largest;
+   the last big push. Wants 9's settings store for per-show quality filters.
+7. **15 - rename torrent-downloader -> medialab-downloader.** Cosmetic alignment,
+   lowest priority; do when quiet (or not at all - the historical name is
+   defensible).
+
+Soft prerequisites: item 9 (settings store) precedes 14 and 12's per-show
+filters. Otherwise items are independent and the order is preference, not
+hard dependency.
 
 ## Session start - check submodule state
 
