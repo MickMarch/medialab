@@ -1,8 +1,17 @@
 # Spec: TV season/episode targeting for torrent search
 
-Status: DRAFT (awaiting approval)
+Status: DONE (shipped 2026-07-02). Released as contracts v0.3.0,
+torrent-downloader v1.3.0, orchestrator v0.3.0, bot v2.1.0.
 Date: 2026-06-30
-Roadmap: new backlog item (slots near reliability work, items 10/11)
+Roadmap: backlog item 19.
+
+> Note: the per-repo version numbers written below were predictions made while
+> drafting. Two missed - orchestrator shipped v0.3.0 (v0.2.0 was already taken)
+> and bot shipped v2.1.0 (it was already at v2.0.0 post-gateway-rewire, not the
+> v1.1.0 assumed here). Lesson applied going forward: specs and the roadmap
+> reference work by item number + feature, never a predicted version. The git
+> tag at release is the sole version source of truth (already derived by
+> hatch-vcs). See the root CLAUDE.md "Versioning" convention.
 
 ## Problem
 

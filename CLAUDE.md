@@ -335,7 +335,11 @@ Endpoints:
 - `GET /api/v1/search/tmdb` - TMDB multi-search
 - `GET /api/v1/search/tmdb/movie/{tmdb_id}` - movie detail
 - `GET /api/v1/search/tmdb/show/{tmdb_id}` - show detail
-- `GET /api/v1/search/torrents` - qBittorrent plugin search, grouped by resolution
+- `GET /api/v1/search/torrents` - qBittorrent plugin search, grouped by
+  resolution. `media_type` required (selects the plugin category); shows accept
+  optional `season`/`episode` that refine the search pattern (`S0N`/`S0NE0M`) and
+  strictly filter results to the requested season (range/complete-series packs
+  kept as fallbacks). v1.3.
 - `POST /api/v1/download` - submit magnet URI (VPN enforced); accepts `media_type`
   (movie|show) and resolves the save path itself under `MEDIA_HOST_PATH`, no
   genre subfolders, caches `media_type`/`host_path` against the torrent hash
@@ -577,6 +581,23 @@ it is either mis-scoped (mock it) or an integration test (mark + skip).
 Each service is an independent repo with its own tags and releases.
 Version tags: `vX.Y.Z` annotated tags pushed to GitHub, GitHub Release created from tag.
 Branch strategy: feature branches off main, PR to merge.
+
+### Versioning: never predict a version number
+
+Each service versions independently on its own semver line - there is no shared
+counter and no central version manifest (that would be a second source of truth
+that drifts from the tags). The **git tag is the single source of truth** for a
+service's version; `hatch-vcs` derives everything from it, so nothing is
+hardcoded.
+
+Because of that, do NOT write a predicted version into the roadmap, a spec, a
+branch name, or a PR title. Reference work by **item number + feature name**
+("item 19: TV season targeting"), not "bot v1.1.0". The concrete version is
+chosen only **at release time**, from the actual last tag plus the change kind
+(Keep-a-Changelog: `Added`/`Changed` -> minor, `Fixed` -> patch, breaking ->
+major). Predicting a version before the tag exists is what caused the item-19
+drift (orchestrator was guessed v0.2.0 but that tag existed, so it shipped
+v0.3.0; bot was guessed v1.1.0 but was already at v2.0.0, so it shipped v2.1.0).
 
 ## Deployment
 
