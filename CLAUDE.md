@@ -246,6 +246,25 @@ Items 8-9 are fast-follows after the MVP (1-7); do not block the MVP on them.
     pursued. Medium; do alongside or just after the webhook (16), since an
     always-on pipeline needs an always-on stack.
 
+19. **TV season/episode targeting in torrent search.** The show download flow
+    searches torrents by show title only, buckets by resolution, sorts by
+    seeders - so the latest season's packs (highest seeders) bury older seasons
+    and individual episodes are unreachable. Add season/episode targeting: the
+    bot reads the real season list from the existing TMDB show-detail endpoint
+    and presents a scope picker (whole series / a season / a single episode);
+    torrent-downloader refines the qBittorrent search `pattern` with an
+    `S0NE0M` tag and strictly drops PTN-parsed results that do not match the
+    requested season (complete-series and multi-season range packs kept as
+    labeled fallbacks so the set is never empty). `media_type` becomes a
+    required query param on `GET /search/torrents`. Spans four repos:
+    `medialab-contracts` (v0.3.0 - new `TorrentSearchScope` model), then
+    torrent-downloader (v1.3 - params + `filter_by_scope` + scope-aware cache
+    key), orchestrator (v0.2.0 - pass params through the proxy, no job-table
+    change), bot (v1.1.0 - the new scope-picker UI state for shows). Full design:
+    `tv-season-targeting-spec.md`. Decisions locked (granularity = season +
+    episode, season list from TMDB detail, strict drop-non-matching). Medium;
+    high user value - this is a real correctness gap in the core download path.
+
 ### Backlog ordering (agreed 2026-06-29)
 
 The backlog items above are numbered by when they were raised, not by priority.
@@ -257,10 +276,16 @@ Execution order:
 2. **18 - uptime / autostart.** Pair with 16: an always-on pipeline needs an
    always-on stack (containers on boot + host apps up).
 3. **17 - show torrent size**, then **13 - `/stop-seeding` command.** Two small,
-   isolated quick wins to clear after the keystone.
-4. **Reliability: 11 - full Jellyfin naming**, then **10 - stuck/failed
-   remediation.** Make the core loop correctly organized and robust before
-   adding features. (11 refines the existing rename step; 10 hardens it.)
+   isolated quick wins to clear after the keystone. Note 17 edits the same bot
+   torrent-picker Select that 19 reworks - if 19 is in flight, fold 17's
+   size-in-description into 19's picker pass rather than doing it twice.
+4. **Reliability: 19 - TV season/episode targeting**, then **11 - full Jellyfin
+   naming**, then **10 - stuck/failed remediation.** Make the core download +
+   organize loop correct and robust before adding features. (19 fixes which
+   torrent the user can even get; 11 refines the post-download rename; 10
+   hardens it.) 19 spans four repos (contracts -> downloader -> orchestrator
+   -> bot) and is the largest of the three; sequence it first because a wrong
+   download makes the downstream naming/remediation moot.
 5. **Setup polish: 9 - `/settings` cog**, then **14 - storage-threshold
    warning** (14 depends on 9's settings store), then **8 - medialab-setup
    wizard.** Build 8 before sharing the project / portfolio use - it owns the
