@@ -273,18 +273,26 @@ Items 8-9 are fast-follows after the MVP (1-7); do not block the MVP on them.
 20. **Fully containerized, self-hostable stack.** Today the suite assumes
     host-installed qBittorrent + Jellyfin reached over `host.docker.internal`,
     with VPN enforcement bound to the host's `NordLynx` interface. Containerize
-    both external apps (a gluetun VPN sidecar for qBittorrent so `is_vpn_bound`
-    still holds inside the container; a Jellyfin container) so the whole stack -
-    minus the media directories - comes up from compose alone. This is the path
-    to a real prod/staging/dev environment model (base compose + overlays, see
-    "Environments") and to letting other users self-host the project without a
-    bespoke host setup. Touches: torrent-downloader's hardcoded `NordLynx`
-    VPN-interface check (make it configurable / dev-relaxable), each service's
-    `*_HOST` defaults, the compose topology, and onboarding docs. Overlaps item 8
-    (setup wizard owns config generation) and item 18 (autostart/uptime).
-    Spec-first; medium-large. The `docker-compose.dev.yml` overlay (item-19 live
-    verification) is the first slice - it containerizes qBittorrent for search
-    but explicitly defers VPN + download and the Jellyfin container to this item.
+    the four medialab services + qBittorrent + a gluetun VPN container so the
+    stack - minus the media directories - comes up from compose alone. This is
+    the path to a real prod/staging/dev environment model (base compose +
+    overlays, see "Environments") and to letting others self-host without a
+    bespoke host setup. **Full design + locked decisions:
+    `containerized-stack-vpn-spec.md` (reviewed DRAFT).** Key decisions:
+    (1) containerize services + qBittorrent + gluetun; **Jellyfin stays EXTERNAL**
+    (native or the user's own container) reached by URL - the app never owns its
+    lifecycle (native GPU transcoding on Windows is easy, containerized is not).
+    (2) **VPN is a hard, non-bypassable invariant** - no torrent traffic
+    (download or seed) without a bound VPN, no dev exception. gluetun holds a
+    WireGuard tunnel; qBittorrent routes through it; gluetun's firewall is the
+    automatic leak-proof kill-switch. (3) **User supplies a WireGuard config
+    file, never a VPN password** (comfort + safety). (4) torrent-downloader's
+    hardcoded `NordLynx` check becomes configurable (never relaxable). (5) seed
+    stops N minutes after 100% (configurable, default 0). Overlaps item 8 (setup
+    wizard collects the WireGuard file + keys) and item 18 (autostart/uptime).
+    Spec-first; medium-large; 4 open questions remain in the spec. The
+    `docker-compose.dev.yml` search-only overlay (item-19 verification) is the
+    first slice and needs none of the VPN work.
 
 ### Backlog ordering (agreed 2026-06-29)
 
