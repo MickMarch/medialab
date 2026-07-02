@@ -264,6 +264,27 @@ Items 8-9 are fast-follows after the MVP (1-7); do not block the MVP on them.
     `tv-season-targeting-spec.md`. Decisions locked (granularity = season +
     episode, season list from TMDB detail, strict drop-non-matching). Medium;
     high user value - this is a real correctness gap in the core download path.
+    **COMPLETE (2026-07-02).** Shipped across all four repos: contracts v0.3.0
+    (`TorrentSearchScope`), torrent-downloader v1.3.0 (params + `filter_by_scope`
+    + scope-aware cache key + category from media_type), orchestrator v0.3.0
+    (proxy passthrough), bot v2.1.0 (`views/scope.py` season/episode pickers +
+    `run_torrent_search` helper). Root pins bumped. Not yet verified live.
+
+20. **Fully containerized, self-hostable stack.** Today the suite assumes
+    host-installed qBittorrent + Jellyfin reached over `host.docker.internal`,
+    with VPN enforcement bound to the host's `NordLynx` interface. Containerize
+    both external apps (a gluetun VPN sidecar for qBittorrent so `is_vpn_bound`
+    still holds inside the container; a Jellyfin container) so the whole stack -
+    minus the media directories - comes up from compose alone. This is the path
+    to a real prod/staging/dev environment model (base compose + overlays, see
+    "Environments") and to letting other users self-host the project without a
+    bespoke host setup. Touches: torrent-downloader's hardcoded `NordLynx`
+    VPN-interface check (make it configurable / dev-relaxable), each service's
+    `*_HOST` defaults, the compose topology, and onboarding docs. Overlaps item 8
+    (setup wizard owns config generation) and item 18 (autostart/uptime).
+    Spec-first; medium-large. The `docker-compose.dev.yml` overlay (item-19 live
+    verification) is the first slice - it containerizes qBittorrent for search
+    but explicitly defers VPN + download and the Jellyfin container to this item.
 
 ### Backlog ordering (agreed 2026-06-29)
 
@@ -612,6 +633,38 @@ already account for this (host vs. container `*_HOST` values).
 Containers communicate with each other over HTTP + `X-API-Key`, same as they
 would un-containerized - no service-to-service magic beyond normal REST calls
 (plus a shared Docker network/compose file once orchestrator exists).
+
+## Environments (prod / dev)
+
+Standard "one base compose + overlays" pattern. `docker-compose.yml` is the base
+(prod). Overlays layer on top and are namespaced by `COMPOSE_PROJECT_NAME` so a
+dev stack runs fully isolated from prod - separate containers, network, and
+volumes.
+
+- **prod**: `docker compose up` (project `medialab`, gateway on 8000, host
+  qBittorrent/Jellyfin over `host.docker.internal`).
+- **dev**: `docker-compose.dev.yml` overlay (project `medialab-dev`, gateway on
+  8001). Non-interfering: a throwaway containerized `qbittorrent-dev`, a
+  separate dev Discord bot (`medialab-bot/.env.dev` - its own token, since two
+  processes on one Discord token get disconnected), a test media dir
+  (`MEDIA_HOST_DIR_DEV`), and an isolated dev job-store volume. Run:
+  `docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml up --build`.
+  Copy `.env.dev.example` -> `.env.dev` (root) and
+  `medialab-bot/.env.dev.example` -> `medialab-bot/.env.dev` first.
+
+What the dev overlay covers today: the TMDB search + TV scope-picker + scoped
+torrent-search path (no VPN needed). What it does NOT cover yet (deferred to a
+full-containerization spec): `POST /download` needs qBittorrent VPN-bound
+(`is_vpn_bound` hard-blocks; a container qBittorrent has no `NordLynx`
+interface - wants a gluetun VPN sidecar + a dev-only relaxation), container
+qBittorrent WebUI auth alignment, and a Jellyfin container. Staging is a future
+overlay copied from the dev pattern (its own project name/port/bot) when a
+pre-release gate is actually needed.
+
+The full-containerization work (VPN sidecar, Jellyfin container, base +
+dev/staging/prod overlays) is also the path to making the suite self-hostable by
+others - a roadmap-worthy item, overlapping backlog items 8 (setup wizard) and
+18 (uptime/autostart).
 
 ## Environment
 
