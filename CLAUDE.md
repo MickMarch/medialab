@@ -290,9 +290,9 @@ Items 8-9 are fast-follows after the MVP (1-7); do not block the MVP on them.
     hardcoded `NordLynx` check becomes configurable (never relaxable). (5) seed
     stops N minutes after 100% (configurable, default 0). Overlaps item 8 (setup
     wizard collects the WireGuard file + keys) and item 18 (autostart/uptime).
-    Spec-first; medium-large; 4 open questions remain in the spec. The
-    `docker-compose.dev.yml` search-only overlay (item-19 verification) is the
-    first slice and needs none of the VPN work.
+    Spec-first; medium-large; 4 open questions remain in the spec. A dev/staging
+    environment model folds into this item (see "Environments" - deferred for a
+    solo user for now).
 
 ### Backlog ordering (agreed 2026-06-29)
 
@@ -644,35 +644,13 @@ would un-containerized - no service-to-service magic beyond normal REST calls
 
 ## Environments (prod / dev)
 
-Standard "one base compose + overlays" pattern. `docker-compose.yml` is the base
-(prod). Overlays layer on top and are namespaced by `COMPOSE_PROJECT_NAME` so a
-dev stack runs fully isolated from prod - separate containers, network, and
-volumes.
-
-- **prod**: `docker compose up` (project `medialab`, gateway on 8000, host
-  qBittorrent/Jellyfin over `host.docker.internal`).
-- **dev**: `docker-compose.dev.yml` overlay (project `medialab-dev`, gateway on
-  8001). Non-interfering: a throwaway containerized `qbittorrent-dev`, a
-  separate dev Discord bot (`medialab-bot/.env.dev` - its own token, since two
-  processes on one Discord token get disconnected), a test media dir
-  (`MEDIA_HOST_DIR_DEV`), and an isolated dev job-store volume. Run:
-  `docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml up --build`.
-  Copy `.env.dev.example` -> `.env.dev` (root) and
-  `medialab-bot/.env.dev.example` -> `medialab-bot/.env.dev` first.
-
-What the dev overlay covers today: the TMDB search + TV scope-picker + scoped
-torrent-search path (no VPN needed). What it does NOT cover yet (deferred to a
-full-containerization spec): `POST /download` needs qBittorrent VPN-bound
-(`is_vpn_bound` hard-blocks; a container qBittorrent has no `NordLynx`
-interface - wants a gluetun VPN sidecar + a dev-only relaxation), container
-qBittorrent WebUI auth alignment, and a Jellyfin container. Staging is a future
-overlay copied from the dev pattern (its own project name/port/bot) when a
-pre-release gate is actually needed.
-
-The full-containerization work (VPN sidecar, Jellyfin container, base +
-dev/staging/prod overlays) is also the path to making the suite self-hostable by
-others - a roadmap-worthy item, overlapping backlog items 8 (setup wizard) and
-18 (uptime/autostart).
+Deferred. A dev/staging environment model (base compose + overlays, namespaced
+by `COMPOSE_PROJECT_NAME`, a separate dev Discord bot in a separate dev guild) is
+not built - it is not earning its keep for a solo user with tagged releases to
+revert to. Build-and-test happens on the single prod stack for now. When a dev
+environment is wanted, it is folded into the full-containerization work (backlog
+item 20, `containerized-stack-vpn-spec.md`), which is also the self-hostable
+path.
 
 ## Environment
 
