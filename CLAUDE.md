@@ -642,6 +642,39 @@ Containers communicate with each other over HTTP + `X-API-Key`, same as they
 would un-containerized - no service-to-service magic beyond normal REST calls
 (plus a shared Docker network/compose file once orchestrator exists).
 
+## Version tracking & rebuild (`bin/`)
+
+The root `docker-compose.yml` tags each image `medialab/<svc>:${<SVC>_VERSION}`
+and passes that version as the `APP_VERSION` build arg, which the Dockerfile
+bakes in two ways: `hatch-vcs` version (via `SETUPTOOLS_SCM_PRETEND_VERSION`)
+and an `org.opencontainers.image.version` OCI label. Versions come from each
+pinned submodule's `git describe --tags` - the git tag stays the single source
+of truth (see "Versioning: never predict a version number").
+
+Three scripts (repo-local, run by explicit path - they install nothing global):
+
+```bash
+bin/medialab-versions.sh   # write .versions.env from submodule tags (gitignored, transient)
+bin/medialab-build.sh [svc...]  # regen versions, then docker compose build (subset by name, or all)
+bin/medialab-status.sh     # 5-way skew table: local / pinned / built / running / latest-tag
+```
+
+`bin/medialab-status.sh` is how you see version skew: LOCAL (submodule working
+tree) vs PINNED (root submodule SHA) vs BUILT (OCI label on the local image) vs
+RUNNING (label on the live container) vs LATEST-TAG (newest tag on origin). A
+clean stack has local == built == running == newest tag.
+
+To run compose with the real version tags, load the generated file:
+`docker compose --env-file .versions.env up -d` (a bare `docker compose ...`
+still works - the `:-dev` fallbacks in compose keep it running unversioned).
+
+**Baseline pre-rework:** the stack running before this tooling was built with the
+old compose (no `APP_VERSION` arg), so those images carry `0.0.0` internally and
+`status` shows them `unlabeled`. Their real versions were reconstructed from
+image-build-date vs tag-history and recorded in `WORKING-STATE.md` +
+`bin/last-known-good.env` as the last-known-good rollback point. Post-rework
+builds carry the true version, so this inference is a one-time thing.
+
 ## Environments (prod / dev)
 
 Deferred. A dev/staging environment model (base compose + overlays, namespaced

@@ -6,6 +6,12 @@
 # one value compose itself interpolates is MEDIA_HOST_DIR (the host media root
 # bind-mounted into the services that touch files); set it in a root .env or the
 # shell environment. See medialab-setup (roadmap item 8) for guided setup.
+#
+# Per-service *_VERSION vars tag the built images and stamp APP_VERSION into each
+# build (hatch-vcs version + OCI image.version label). They are generated from the
+# pinned submodules' git tags by bin/medialab-versions.sh into .versions.env
+# (gitignored); run bin/medialab-build.sh to regenerate + build. Absent the file,
+# the ':-dev' fallbacks keep a bare 'docker compose build' working.
 
 name: medialab
 
@@ -13,7 +19,9 @@ services:
   torrent-downloader:
     build:
       context: ./torrent-downloader
-    image: medialab/torrent-downloader
+      args:
+        APP_VERSION: ${TORRENT_DOWNLOADER_VERSION:-dev}
+    image: medialab/torrent-downloader:${TORRENT_DOWNLOADER_VERSION:-dev}
     env_file:
       - ./torrent-downloader/.env
     extra_hosts:
@@ -25,7 +33,9 @@ services:
   medialab-jellyfin:
     build:
       context: ./medialab-jellyfin
-    image: medialab/medialab-jellyfin
+      args:
+        APP_VERSION: ${MEDIALAB_JELLYFIN_VERSION:-dev}
+    image: medialab/medialab-jellyfin:${MEDIALAB_JELLYFIN_VERSION:-dev}
     env_file:
       - ./medialab-jellyfin/.env
     extra_hosts:
@@ -37,7 +47,9 @@ services:
   medialab-orchestrator:
     build:
       context: ./medialab-orchestrator
-    image: medialab/medialab-orchestrator
+      args:
+        APP_VERSION: ${MEDIALAB_ORCHESTRATOR_VERSION:-dev}
+    image: medialab/medialab-orchestrator:${MEDIALAB_ORCHESTRATOR_VERSION:-dev}
     env_file:
       - ./medialab-orchestrator/.env
     ports:
@@ -62,7 +74,9 @@ services:
   medialab-bot:
     build:
       context: ./medialab-bot
-    image: medialab/medialab-bot
+      args:
+        APP_VERSION: ${MEDIALAB_BOT_VERSION:-dev}
+    image: medialab/medialab-bot:${MEDIALAB_BOT_VERSION:-dev}
     env_file:
       - ./medialab-bot/.env
     depends_on:
