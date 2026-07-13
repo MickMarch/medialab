@@ -22,12 +22,27 @@ declare -A SERVICES=(
   [medialab-bot]=MEDIALAB_BOT
 )
 
-# Docker image tags cannot contain '+'; hatch-vcs emits e.g. v2.1.0-2-g5fb81ec
-# for a working tree ahead of a tag, which is already tag-safe. Strip a leading
-# 'v' for the version value but keep it deterministic.
+# The value feeds two consumers with conflicting grammars: the Docker image
+# tag (no '+') and SETUPTOOLS_SCM_PRETEND_VERSION (strict PEP 440, so no raw
+# git-describe '-N-gHASH' suffix). The intersection:
+#   exact tag        -> X.Y.Z
+#   N commits ahead  -> X.Y.Z.postN   (commit hash stays recoverable from the
+#                                      root repo's submodule pin)
+#   dirty tree       -> trailing .dev0
 version_of() {
-  local path="$1"
-  git -C "${REPO_ROOT}/${path}" describe --tags --always --dirty 2>/dev/null | sed 's/^v//'
+  local path="$1" desc dirty=""
+  desc="$(git -C "${REPO_ROOT}/${path}" describe --tags --always --dirty 2>/dev/null | sed 's/^v//')"
+  if [[ "${desc}" == *-dirty ]]; then
+    dirty=".dev0"
+    desc="${desc%-dirty}"
+  fi
+  if [[ "${desc}" =~ ^(.+)-([0-9]+)-g[0-9a-f]+$ ]]; then
+    desc="${BASH_REMATCH[1]}.post${BASH_REMATCH[2]}"
+  elif [[ ! "${desc}" =~ ^[0-9] ]]; then
+    # No tag reachable: describe fell back to a bare commit hash.
+    desc="0.0.0"
+  fi
+  printf '%s%s\n' "${desc}" "${dirty}"
 }
 
 : > "${OUT}"

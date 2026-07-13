@@ -664,9 +664,12 @@ tree) vs PINNED (root submodule SHA) vs BUILT (OCI label on the local image) vs
 RUNNING (label on the live container) vs LATEST-TAG (newest tag on origin). A
 clean stack has local == built == running == newest tag.
 
-To run compose with the real version tags, load the generated file:
-`docker compose --env-file .versions.env up -d` (a bare `docker compose ...`
-still works - the `:-dev` fallbacks in compose keep it running unversioned).
+To run compose with the real version tags, load BOTH env files:
+`docker compose --env-file .env --env-file .versions.env up -d`. Passing any
+`--env-file` disables compose's automatic `.env` load, so the root `.env`
+(`MEDIA_HOST_DIR`) must be passed explicitly alongside the versions file (a
+bare `docker compose ...` still works - `.env` auto-loads and the `:-dev`
+fallbacks keep it running unversioned).
 
 **Baseline pre-rework:** the stack running before this tooling was built with the
 old compose (no `APP_VERSION` arg), so those images carry `0.0.0` internally and
@@ -674,6 +677,37 @@ old compose (no `APP_VERSION` arg), so those images carry `0.0.0` internally and
 image-build-date vs tag-history and recorded in `WORKING-STATE.md` +
 `bin/last-known-good.env` as the last-known-good rollback point. Post-rework
 builds carry the true version, so this inference is a one-time thing.
+
+## Design debt (observed, not yet scheduled)
+
+Running list of poor or fragile design choices noticed during operation. Fold
+each into a backlog item when it starts costing time; none is urgent alone.
+
+- **Two-flag compose invocation.** Any versioned compose command needs
+  `--env-file .env --env-file .versions.env` because passing one `--env-file`
+  kills the automatic `.env` load. Forgetting a flag silently degrades (`:dev`
+  image tags or a blank `MEDIA_HOST_DIR`). Fix: a `bin/medialab-up.sh` wrapper
+  (mirroring `medialab-build.sh`) so no human types the flags; or fold
+  `MEDIA_HOST_DIR` handling into the generated file's flow.
+- **Version-grammar collision (fixed 2026-07-13, watch for recurrence).** One
+  string feeds two grammars: Docker image tags (no `+`) and PEP 440
+  `SETUPTOOLS_SCM_PRETEND_VERSION` (no raw git-describe `-N-gHASH`).
+  `bin/medialab-versions.sh` now maps describe output into the intersection
+  (`X.Y.Z.postN`, dirty -> `.dev0`), losing the commit hash from the image tag
+  (recoverable via the root submodule pin). Underlying smell: building
+  untagged commits at all. Cleaner habit: tag (patch bump) before building a
+  deploy, so images are always exact-tag versions.
+- **Pins routinely sit past the last tag.** Post-release `chore` commits (OCI
+  label stamps, template add/remove) leave every submodule N commits ahead of
+  its tag, which is what exercised the collision above. Either tag after such
+  chores or batch them into the next release PR.
+- **Config duplication across per-service `.env` files** - shared values
+  (API keys both sides of a pair, `MEDIA_HOST_DIR` vs each service's mount
+  expectations) are hand-synced. Already tracked: [[chore_config_layout]],
+  owned by the setup wizard (backlog item 8).
+- **`WORKING-STATE.md` is a one-shot document.** The inferred-baseline
+  rollback table is obsolete once a post-rework stack is verified live;
+  prune or archive it then so it does not read as current truth.
 
 ## Environments (prod / dev)
 

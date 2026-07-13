@@ -14,9 +14,13 @@ REPO_ROOT="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel)"
 
 "${REPO_ROOT}/bin/medialab-versions.sh"
 
-# --env-file loads the generated versions so both the image tag and the
-# APP_VERSION build arg resolve to the real git version.
+# Passing any --env-file disables compose's automatic .env load, so the root
+# .env (MEDIA_HOST_DIR) must be passed explicitly alongside the generated
+# versions file. Both are needed: .env for interpolated host values,
+# .versions.env so the image tag and APP_VERSION build arg resolve to the
+# real git version.
 docker compose \
   --project-directory "${REPO_ROOT}" \
+  --env-file "${REPO_ROOT}/.env" \
   --env-file "${REPO_ROOT}/.versions.env" \
   build "$@"
