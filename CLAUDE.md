@@ -294,6 +294,35 @@ Items 8-9 are fast-follows after the MVP (1-7); do not block the MVP on them.
     environment model folds into this item (see "Environments" - deferred for a
     solo user for now).
 
+21. **Re-add `/torrent` (custom torrent search, no TMDB).** Bring back a bot
+    command that searches torrents by raw query, completely skipping TMDB -
+    for content TMDB does not know or where the user knows the exact release
+    name. Removed in the item-6 rewrite because the gateway's `POST /download`
+    requires `tmdb_id` + `media_type` and the pipeline's RESOLVE_META/RENAME
+    steps depend on a TMDB identity for the canonical `Title (Year)` naming.
+    That is the design problem to solve before code: a TMDB-less job breaks
+    the current job model. Options to weigh in the spec: (a) nullable
+    `tmdb_id` on the job + a degraded pipeline that skips RESOLVE_META and
+    falls back to a PTN-parsed rename (or no rename), flagged so the user
+    knows Jellyfin matching may be worse; (b) a distinct job kind
+    (`manual` vs `tmdb`) with its own step sequence; (c) an optional
+    after-the-fact TMDB match step (search TMDB with the PTN-parsed
+    title/year, attach if confident, else leave manual). Touches contracts
+    (job/transfer DTOs currently require `tmdb_id`), torrent-downloader
+    (cache entry requires `tmdb_id`), orchestrator (job table + pipeline
+    branching), bot (new command + picker reuse). `media_type` still required
+    (user picks movie/show in the command). Spec-first; medium.
+
+22. **Torrent search pattern: year as bare number.** The torrent search
+    pattern built after `/search` must use `Title YYYY` ("Calvary 2014"),
+    never `Title (YYYY)` - parenthesized years poison release-name matching.
+    Verified 2026-07-13: `run_torrent_search` already builds
+    `f"{title} {year}"` (bot `views/torrent.py`), parentheses appear only in
+    Discord display strings, so current behavior is correct. Keep as a guard:
+    when touching the search-pattern path (items 19 follow-ups, 21), preserve
+    the bare-year form; consider a regression test asserting the pattern
+    contains no parentheses. Tiny.
+
 ### Backlog ordering (agreed 2026-06-29)
 
 The backlog items above are numbered by when they were raised, not by priority.
@@ -330,6 +359,12 @@ Execution order:
 Soft prerequisites: item 9 (settings store) precedes 14 and 12's per-show
 filters. Otherwise items are independent and the order is preference, not
 hard dependency.
+
+Added 2026-07-13, not yet sequenced: **21 - `/torrent` re-add** (spec-first,
+job-model question; natural slot is after the reliability block, since it
+branches the pipeline that 10/11 harden) and **22 - bare-year search pattern**
+(verify-only guard, fold into whichever item next touches the search-pattern
+path).
 
 ## Session start - check submodule state
 
