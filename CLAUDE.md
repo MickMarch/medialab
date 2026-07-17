@@ -334,6 +334,52 @@ Items 8-9 are fast-follows after the MVP (1-7); do not block the MVP on them.
     the bare-year form; consider a regression test asserting the pattern
     contains no parentheses. Tiny.
 
+23. **Per-plugin `fileUrl` handling (magnet / .torrent URL / details page).**
+    The core correctness bug behind "shows return nothing": the search
+    pipeline assumes every qBittorrent search plugin returns a magnet in
+    `fileUrl`, but the plugins return three different shapes, and
+    `filter_and_sort_results` drops anything that is not `magnet:?`. Observed
+    live (2026-07-17):
+
+    | Engine | `fileUrl` shape | Handling needed |
+    |---|---|---|
+    | piratebay | `magnet:?xt=...` | none - works today |
+    | torlock | `.torrent` file URL (`/tor/NNN.torrent`, `application/x-bittorrent`) | pass URL straight to `torrents_add(urls=...)` - qBittorrent fetches it |
+    | limetorrents | HTML details page | fetch page + scrape `magnet:?xt=urn:btih:...` (confirmed present) |
+    | jackett | error row (`seed=-1`, api-key unset) | operational: set `api_key` in `jackett.json`, not code (see `API-KEYS.md`) |
+
+    Popular movies work because piratebay indexes them (magnets); older/niche
+    TV (e.g. The Simpsons S23) returns only torlock+limetorrents, 100% of which
+    the magnet-only filter discards - empty picker despite ~24 raw hits.
+
+    Three independent tiers, each shippable alone, sequence by value/risk:
+    - **Tier A - `.torrent` URL passthrough** (biggest win, lowest risk). Stop
+      dropping `fileUrl`s that are `.torrent` links; pass them to
+      `torrents_add`. Recovers torlock. Alone this unblocks the Simpsons case.
+    - **Tier B - details-page scrape** (fragile). For an HTML `fileUrl`, fetch
+      the page (behind the VPN, inside torrent-downloader) and regex the
+      magnet. Recovers limetorrents. Generic `magnet:?xt=` scrape covers both
+      scraper sites; no per-site parser needed so far.
+    - **Tier C - resolution-`Other` bucket.** DONE (torrent-downloader v1.3.3):
+      untagged/SD results no longer dropped by `group_by_resolution`. This
+      alone was necessary but not sufficient - the magnet filter upstream still
+      dropped everything for the TV case.
+
+    **The real design work is hash caching, not the add itself.** Today
+    `POST /download` extracts the BTIH hash from the input magnet to cache
+    `{media_type, host_path, tmdb_id}` against it (the orchestrator looks it up
+    at completion). A `.torrent` URL or scraped page does not carry the hash up
+    front, so caching must move to *after* the add - read the hash back from
+    qBittorrent (`torrents_add` does not return it; look it up by the just-added
+    torrent) and cache then. This is the crux and why it is spec-first, not an
+    inline patch. Likely threads `engineName`/url-kind through search results so
+    the download side knows how to handle the chosen `fileUrl`. Spans
+    contracts (download DTO field for the URL kind), torrent-downloader
+    (filter + add + post-add hash cache), possibly the gateway/bot if the
+    picker must carry the kind. Medium; high value - this is the true root
+    cause of the show-download gap, of which items 19's route/pattern fixes
+    and Tier C were only the surface. Spec-first.
+
 ### Backlog ordering (agreed 2026-06-29)
 
 The backlog items above are numbered by when they were raised, not by priority.
@@ -376,6 +422,15 @@ job-model question; natural slot is after the reliability block, since it
 branches the pipeline that 10/11 harden) and **22 - bare-year search pattern**
 (verify-only guard, fold into whichever item next touches the search-pattern
 path).
+
+Added 2026-07-17: **23 - per-plugin `fileUrl` handling** jumps near the front
+of the reliability block, alongside/just after item 19 - it is the true root
+cause of the show-download gap (item 19's route + pattern fixes and the
+resolution-`Other` bucket were only the surface; the magnet-only filter still
+drops all torlock/limetorrents TV results). Do Tier A (`.torrent` URL
+passthrough) as the immediate high-value slice - it unblocks TV downloads for
+the common case with the lowest risk. Independent of the operational Jackett
+fix (set `api_key` in `jackett.json`), which is not code and can happen anytime.
 
 ## Session start - check submodule state
 
@@ -729,6 +784,13 @@ builds carry the true version, so this inference is a one-time thing.
 Running list of poor or fragile design choices noticed during operation. Fold
 each into a backlog item when it starts costing time; none is urgent alone.
 
+- **Single magnet assumption across all search plugins** (now scheduled as
+  backlog item 23). `filter_and_sort_results` requires `fileUrl` to be
+  `magnet:?`, but qBittorrent's plugins return three shapes (magnet / `.torrent`
+  URL / HTML details page). Non-magnet results are silently dropped, so
+  content only indexed by the non-magnet plugins (older/niche TV) returns an
+  empty picker despite raw hits. Root cause of the show-download gap. See item
+  23 for the tiered fix and the post-add hash-caching design change.
 - **Two-flag compose invocation.** Any versioned compose command needs
   `--env-file .env --env-file .versions.env` because passing one `--env-file`
   kills the automatic `.env` load. Forgetting a flag silently degrades (`:dev`
