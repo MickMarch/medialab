@@ -319,7 +319,10 @@ Items 8-9 are fast-follows after the MVP (1-7); do not block the MVP on them.
     (job/transfer DTOs currently require `tmdb_id`), torrent-downloader
     (cache entry requires `tmdb_id`), orchestrator (job table + pipeline
     branching), bot (new command + picker reuse). `media_type` still required
-    (user picks movie/show in the command). Spec-first; medium.
+    (user picks movie/show in the command). Motivating edge case (2026-07-17):
+    TMDB titles are sometimes unusable as torrent queries - the 2026 "The
+    Mummy" is titled "Lee Cronin's The Mummy" on TMDB, which returns zero
+    torrent hits; a manual query is the escape hatch. Spec-first; medium.
 
 22. **Torrent search pattern: year as bare number.** The torrent search
     pattern built after `/search` must use `Title YYYY` ("Calvary 2014"),
