@@ -268,7 +268,15 @@ Items 8-9 are fast-follows after the MVP (1-7); do not block the MVP on them.
     (`TorrentSearchScope`), torrent-downloader v1.3.0 (params + `filter_by_scope`
     + scope-aware cache key + category from media_type), orchestrator v0.3.0
     (proxy passthrough), bot v2.1.0 (`views/scope.py` season/episode pickers +
-    `run_torrent_search` helper). Root pins bumped. Not yet verified live.
+    `run_torrent_search` helper). Root pins bumped. First live test (2026-07-17)
+    caught a cross-service path bug: torrent-downloader's TV detail route was
+    `/tmdb/tv/` while the orchestrator builds `/tmdb/show/` from
+    `MediaType.SHOW.value`, 404ing every show-detail call - the bot silently
+    fell back to whole-series search, hiding the scope picker. Fixed in
+    torrent-downloader v1.3.1 (route renamed to `/tmdb/show/`), verified
+    through the gateway (season list returns). Scope-picker UI still awaits a
+    live Discord pass. Lesson: mock-boundary tests never exercise cross-service
+    path contracts - each side's suite passed while the pair was broken.
 
 20. **Fully containerized, self-hostable stack.** Today the suite assumes
     host-installed qBittorrent + Jellyfin reached over `host.docker.internal`,
