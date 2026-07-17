@@ -378,7 +378,12 @@ Items 8-9 are fast-follows after the MVP (1-7); do not block the MVP on them.
     (filter + add + post-add hash cache), possibly the gateway/bot if the
     picker must carry the kind. Medium; high value - this is the true root
     cause of the show-download gap, of which items 19's route/pattern fixes
-    and Tier C were only the surface. Spec-first.
+    and Tier C were only the surface. Spec-first. **Spec drafted
+    (`item-23-plugin-fileurl-spec.md`), decisions locked:** surrogate `job_id`
+    PK with a nullable backfilled `torrent_hash` (decouples job identity from
+    the torrent source), and `magnet_uri` -> `source_url` (accepts magnet or
+    `.torrent` URL). That spec covers Tier A + the keying change only; Tier B
+    (page scrape) and jackett stay backlog. Awaiting approval before code.
 
 ### Backlog ordering (agreed 2026-06-29)
 
