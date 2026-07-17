@@ -346,7 +346,10 @@ Items 8-9 are fast-follows after the MVP (1-7); do not block the MVP on them.
     | piratebay | `magnet:?xt=...` | none - works today |
     | torlock | `.torrent` file URL (`/tor/NNN.torrent`, `application/x-bittorrent`) | pass URL straight to `torrents_add(urls=...)` - qBittorrent fetches it |
     | limetorrents | HTML details page | fetch page + scrape `magnet:?xt=urn:btih:...` (confirmed present) |
-    | jackett | error row (`seed=-1`, api-key unset) | operational: set `api_key` in `jackett.json`, not code (see `API-KEYS.md`) |
+
+    (A jackett plugin row also appeared as an error - Jackett is a separate app
+    not running on this host; it is deliberately NOT part of this item and not
+    on the backlog. Ignore its rows.)
 
     Popular movies work because piratebay indexes them (magnets); older/niche
     TV (e.g. The Simpsons S23) returns only torlock+limetorrents, 100% of which
@@ -383,7 +386,7 @@ Items 8-9 are fast-follows after the MVP (1-7); do not block the MVP on them.
     PK with a nullable backfilled `torrent_hash` (decouples job identity from
     the torrent source), and `magnet_uri` -> `source_url` (accepts magnet or
     `.torrent` URL). That spec covers Tier A + the keying change only; Tier B
-    (page scrape) and jackett stay backlog. Awaiting approval before code.
+    (page scrape) stays backlog. Awaiting approval before code.
 
 ### Backlog ordering (agreed 2026-06-29)
 
@@ -434,8 +437,7 @@ cause of the show-download gap (item 19's route + pattern fixes and the
 resolution-`Other` bucket were only the surface; the magnet-only filter still
 drops all torlock/limetorrents TV results). Do Tier A (`.torrent` URL
 passthrough) as the immediate high-value slice - it unblocks TV downloads for
-the common case with the lowest risk. Independent of the operational Jackett
-fix (set `api_key` in `jackett.json`), which is not code and can happen anytime.
+the common case with the lowest risk.
 
 ## Session start - check submodule state
 

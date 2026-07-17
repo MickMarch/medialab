@@ -155,19 +155,23 @@ shows the job, hash stamped, pipeline advances on completion.
 ## Explicitly out of scope (stay in item 23 backlog)
 
 - Tier B: limetorrents details-page magnet scraping.
-- Jackett (operational, user chose to skip).
 - `url_kind` enum in the contract (sniff shape in the downloader instead).
 
-## Open questions
+## Resolved decisions (were open; settled 2026-07-17)
 
-1. Webhook-to-hashless-job match: in the rare case the `.torrent` readback fails
-   at submit (job has null hash) AND the webhook fires, how does the webhook
-   find the right job? Options: (a) orphan-insert keyed by hash and reconcile
-   later (accept a possible duplicate row); (b) match on `release_name` from
-   `%N`; (c) accept that the readback is reliable enough that this is a
-   log-and-orphan edge. Leaning (c) for MVP - the readback is a synchronous
-   qBittorrent call right after add and should almost always succeed.
-2. `GET /jobs/{job_id}` vs keeping a hash lookup too - do we need both address
-   forms, or is `job_id` sufficient for the bot (which holds the id it was
-   returned)? Leaning job_id-only; webhook uses the internal by-hash store
-   method, not the HTTP path.
+1. **Webhook-to-hashless-job match: log-and-orphan (was option c).** The
+   `.torrent` hash readback is a synchronous qBittorrent call immediately after
+   `torrents_add`, so the hash is stamped onto the job at submit in the normal
+   case and the webhook matches by hash exactly as it does for magnet downloads.
+   The rare readback failure (job left with a null hash) is logged; if a
+   completion webhook then arrives for that hash with no matching job, it takes
+   the existing orphan-insert path. No release-name matching, no reconciliation
+   pass - not worth building for a case a synchronous local call should almost
+   never hit. If it proves to happen in practice, revisit with `%N` matching.
+
+2. **HTTP job addressing: `job_id`-only (was open).** The bot holds the
+   `job_id` returned at submit, so `GET /jobs/{job_id}` and
+   `POST /jobs/{job_id}/retry` are the only HTTP address forms. The completion
+   webhook matches by hash through an internal `get_job_by_hash` store method,
+   not an HTTP route - so no by-hash HTTP endpoint is exposed. One address form
+   per surface; no redundant hash lookup path.
