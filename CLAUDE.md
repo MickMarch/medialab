@@ -335,6 +335,20 @@ Items 8-9 are fast-follows after the MVP (1-7); do not block the MVP on them.
     contains no parentheses. Tiny.
 
 23. **Per-plugin `fileUrl` handling (magnet / .torrent URL / details page).**
+    **COMPLETE (2026-07-20), verified live.** All three tiers shipped:
+    downloader v1.4.0 (Tier A: `.torrent` URL passthrough + snapshot-diff hash
+    readback + `source_url` rename), orchestrator v0.4.0 (surrogate `job_id` PK
+    + nullable backfilled `torrent_hash` + hash stamping), bot v2.2.0
+    (`source_url` + job-id addressing), downloader v1.5.0 (Tier B: HTML
+    details-page magnet scraping via `services/source.py`). Tier C (resolution
+    `Other` bucket) was already v1.3.3. Root pins bumped, stack rebuilt, DB
+    volume recreated for the schema change. **Live finding: Tier B was the
+    load-bearing tier, not Tier A.** For real shows (Rick and Morty S8) every
+    seeded result is a limetorrents HTML page; the torlock `.torrent` results
+    Tier A recovers are near-zero-seed. Picker went from empty to 3 seeded
+    results (123/111/37 seeders) after Tier B; a real S8 page scrapes a valid
+    magnet. Original diagnosis retained below.
+
     The core correctness bug behind "shows return nothing": the search
     pipeline assumes every qBittorrent search plugin returns a magnet in
     `fileUrl`, but the plugins return three different shapes, and
