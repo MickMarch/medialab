@@ -162,7 +162,15 @@ Items 8-9 are fast-follows after the MVP (1-7); do not block the MVP on them.
     a remedy - re-announce, recheck, re-add, or cancel-and-cleanup - via a bot
     command. Touches the orchestrator job state machine + a bot surface. Decide:
     a new job status vs. a derived health flag joined onto the live read.
-    Medium.
+    Medium. Motivating case observed 2026-07-20: a download hit qB
+    `Couldn't write to file. Reason: 'Access is denied'` and flipped to
+    upload-only (errored); pressing play (resume) recovered it. Almost certainly
+    a transient file-write lock (Windows Defender real-time scan of `F:\Media`
+    mid-write) - host fix is a Defender exclusion for the media dir +
+    qBittorrent.exe. The app-side remedy is exactly this item: the downloader
+    exposes `state` but has NO resume endpoint (only `stop-seeding`/pause), so
+    item 10 must add a `resume` (qB `torrents_resume`) and the orchestrator can
+    auto-resume errored torrents, self-healing the manual play-press.
 11. **Full Jellyfin naming convention.** The orchestrator's RENAME step already
     does TV `Series Name (Year)/Season NN/`. Extend to Jellyfin's complete spec
     for both libraries so Jellyfin's own tooling (metadata match, versions,
@@ -208,22 +216,25 @@ Items 8-9 are fast-follows after the MVP (1-7); do not block the MVP on them.
     defensible (it names what the service *does*); the rename is cosmetic
     alignment, low priority. Mechanical, medium blast radius.
 
-16. **Wire the qBittorrent completion webhook (job pipeline advance).** The
-    orchestrator's post-download pipeline (STOP_SEEDING -> RESOLVE_META -> RENAME
-    -> REGISTER -> SCAN -> DONE) only advances when qBittorrent runs
-    `scripts/notify_complete.py` on torrent completion, POSTing to
-    `/webhooks/torrent-complete`. That hook is not configured, so every job sits
-    at `DOWNLOAD_SUBMITTED` forever even after the download finishes (observed
-    live via `/jobs`). The relay script and endpoint already exist - this is
-    deployment wiring: configure qBittorrent's "Run external program on torrent
-    completion" to invoke the relay with `%I`/`%N` and the orchestrator URL+key,
-    inside the container topology. Decide the relay's runtime home (qBittorrent
-    runs on the host, the script needs network to the gateway). This is the
-    automation keystone - without it the pipeline never runs end to end. A poll
-    fallback (orchestrator polls `/transfers`, advances on completion) is the
-    documented alternative if the host hook is impractical; the spec chose
-    webhook-over-poll but a poll is the pragmatic homelab option. Medium; high
-    priority (unblocks the whole post-download flow).
+16. **Wire the qBittorrent completion webhook (job pipeline advance).**
+    **CODE + WIRING-PROVEN COMPLETE (2026-07-20); one manual qB setting left to
+    the user.** The relay's runtime home was decided by the question "why build
+    host roots we migrate away in item 20?": the relay
+    (`scripts/notify_complete.py`) was rewritten **standalone + stdlib-only**
+    (`urllib`, no httpx, no package imports; orchestrator v0.4.1) so it runs as a
+    dropped-in single file on the host today AND unchanged inside the qBittorrent
+    container after item 20 - migration is just re-pointing one qB setting, no
+    throwaway infrastructure. Proven live: running the standalone relay from the
+    host (Python 3.13, no httpx) against the deployed gateway created a job that
+    advanced OFF `DOWNLOAD_SUBMITTED` through the worker (an orphan test hash
+    correctly reached FAILED at RESOLVE_META - the pipeline that never executed
+    before now executes). The only remaining step is the user setting
+    qBittorrent's "Run external program on torrent completion" to
+    `python "<path>\notify_complete.py" "%I" "%N"` with `ORCHESTRATOR_URL` +
+    `ORCHESTRATOR_API_KEY` in the qB process env - full instructions +
+    the Windows Defender write-lock note are in the orchestrator README. Poll
+    fallback stays documented but unneeded. First real end-to-end pipeline run
+    (download -> Jellyfin scan) happens once the user sets that qB command.
 17. **Show torrent download size in the picker.** The bot's resolution picker
     shows seeder count but not size. torrent-downloader's torrent search already
     returns `fileSize`; the bot's `TorrentResult` already carries `file_size`.
