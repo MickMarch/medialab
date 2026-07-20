@@ -162,15 +162,60 @@ Items 8-9 are fast-follows after the MVP (1-7); do not block the MVP on them.
     a remedy - re-announce, recheck, re-add, or cancel-and-cleanup - via a bot
     command. Touches the orchestrator job state machine + a bot surface. Decide:
     a new job status vs. a derived health flag joined onto the live read.
-    Medium. Motivating case observed 2026-07-20: a download hit qB
-    `Couldn't write to file. Reason: 'Access is denied'` and flipped to
-    upload-only (errored); pressing play (resume) recovered it. Almost certainly
-    a transient file-write lock (Windows Defender real-time scan of `F:\Media`
-    mid-write) - host fix is a Defender exclusion for the media dir +
-    qBittorrent.exe. The app-side remedy is exactly this item: the downloader
-    exposes `state` but has NO resume endpoint (only `stop-seeding`/pause), so
-    item 10 must add a `resume` (qB `torrents_resume`) and the orchestrator can
-    auto-resume errored torrents, self-healing the manual play-press.
+    Medium. **Spec-relevant decisions locked 2026-07-20 (from live observation):**
+
+    - **Detection = periodic health-poll loop.** The orchestrator's in-process
+      asyncio worker runs a timer (every N min) reading `GET /transfers`, finds
+      torrents in an error/stalled/upload-only state, and acts. This
+      *deliberately reverses* the MVP "no polling, webhook-only" decision - that
+      assumed downloads always complete cleanly and the webhook always fires.
+      They don't: an error mid-download can mean the completion hook NEVER fires,
+      so a webhook-only design cannot detect a stuck job (it sits at
+      `DOWNLOAD_SUBMITTED` forever). The poll is the only way to catch that.
+    - **Remedy = auto-resume + flag-if-repeated.** Automatically resume an
+      errored torrent (qB `torrents_resume` - what the user does by hand now).
+      If it re-errors N times, stop auto-retrying and flag the job
+      (`NEEDS_ATTENTION`) for the bot to surface - self-heals transient locks,
+      escalates genuine failures, avoids an infinite resume loop. The downloader
+      has NO resume endpoint yet (only `stop-seeding`/pause), so item 10 adds
+      `POST /transfers/{hash}/resume` (or a bulk resume-errored).
+
+    **Three distinct failure modes the spec must cover (all observed/derived):**
+    1. **Error DURING download** -> torrent stuck in error/upload-only -> the
+       completion hook never fires -> job stuck at `DOWNLOAD_SUBMITTED`. Only the
+       poll loop catches this. Auto-resume.
+    2. **Error DURING a pipeline step** (RENAME move / SCAN hits a locked file)
+       -> job goes `FAILED` -> already recoverable via the existing forward-retry
+       `POST /jobs/{id}/retry`. Poll could auto-retry these too.
+    3. **Error AFTER completion, during seeding** (observed 2026-07-20 on the
+       "Weapons" movie: the I/O error hit AFTER `notify_complete.py` fired and
+       the pipeline reached DONE; qB flipped to "upload only"). Confirmed
+       mechanism: `stop_seeding_transfers` calls `torrents_pause` (pause, NOT
+       remove), so the torrent stays in qB after our pipeline is done. Two
+       distinct root causes by media type:
+       - **TV (folder IS moved by RENAME):** the paused torrent still points at
+         the original download path, but RENAME moved the folder to
+         `Title (Year)/Season NN/`. If qB resumes/rechecks it cannot find the
+         files -> permanent error. Auto-resume would just re-error (files really
+         are gone from the old path). Fix: STOP_SEEDING should *remove* the
+         torrent (or point qB's save path at the new location) once the pipeline
+         owns the files - not merely pause.
+       - **Movies (RENAME is a no-op, files stay put):** the post-completion
+         error is a transient lock (Windows Defender re-scan, or qB's own final
+         re-verify hitting a briefly-locked file). Auto-resume DOES fix this one.
+       So mode 3 needs BOTH remedies: remove-not-pause for the moved-TV case, and
+       auto-resume for the transient-movie case. A "clean qB for the user" (they
+       may open the qB UI) means a completed+organized torrent must not sit in an
+       errored seed state. Spec must decide the STOP_SEEDING remove-vs-pause
+       behavior (and whether to keep seeding at all - ties to item 20's
+       "stop seeding N minutes after 100%" decision).
+
+    Also still relevant: the transient Windows Defender write-lock case (host
+    fix = Defender exclusion for `F:\Media` + qBittorrent.exe) is what mode-1/3
+    can look like from a fresh-torrent angle. Touches downloader (resume
+    endpoint), orchestrator (poll loop + `NEEDS_ATTENTION` state + the
+    STOP_SEEDING/RENAME ordering question), bot (surface flagged jobs).
+    Spec-first.
 11. **Full Jellyfin naming convention.** The orchestrator's RENAME step already
     does TV `Series Name (Year)/Season NN/`. Extend to Jellyfin's complete spec
     for both libraries so Jellyfin's own tooling (metadata match, versions,
