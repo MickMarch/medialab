@@ -233,8 +233,22 @@ Items 8-9 are fast-follows after the MVP (1-7); do not block the MVP on them.
     `python "<path>\notify_complete.py" "%I" "%N"` with `ORCHESTRATOR_URL` +
     `ORCHESTRATOR_API_KEY` in the qB process env - full instructions +
     the Windows Defender write-lock note are in the orchestrator README. Poll
-    fallback stays documented but unneeded. First real end-to-end pipeline run
-    (download -> Jellyfin scan) happens once the user sets that qB command.
+    fallback stays documented but unneeded. **FIRST REAL END-TO-END RUN DONE
+    (2026-07-20):** the user wired the qB command, a real movie ("Weapons")
+    downloaded, the hook fired, and the pipeline advanced to DONE (SCAN =
+    Jellyfin `Media/Updated` 204). Two fallout fixes were needed and shipped:
+    (a) medialab-jellyfin's `.env` had `JELLYFIN_HOST=127.0.0.1` (itself)
+    instead of `host.docker.internal` (the host's Jellyfin) - config fix, the
+    original 500; (b) the per-download REGISTER step 404'd because the library
+    root is already registered - removed it (orchestrator v0.4.2, pipeline is
+    now RENAME -> SCAN). Item is functionally COMPLETE. Known cosmetic gap seen
+    during the test only because the DB was recreated mid-test: a webhook that
+    finds no matching job orphan-inserts with `tmdb_id=0`, so RESOLVE_META
+    resolves an empty title. In normal operation the `/download` submit creates
+    the job with the real `tmdb_id` and the webhook matches it, so the title
+    resolves - not a real-path bug, but the orphan title fallback (PTN-parse the
+    release name when `tmdb_id=0`) is a nice-to-have tied to item 21's
+    manual-job work.
 17. **Show torrent download size in the picker.** The bot's resolution picker
     shows seeder count but not size. torrent-downloader's torrent search already
     returns `fileSize`; the bot's `TorrentResult` already carries `file_size`.
