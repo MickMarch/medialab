@@ -27,7 +27,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
-      - medialab
+      - internal
     restart: unless-stopped
 
   medialab-jellyfin:
@@ -41,7 +41,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
-      - medialab
+      - internal
     restart: unless-stopped
 
   medialab-orchestrator:
@@ -68,7 +68,7 @@ services:
       - torrent-downloader
       - medialab-jellyfin
     networks:
-      - medialab
+      - internal
     restart: unless-stopped
 
   medialab-bot:
@@ -92,11 +92,11 @@ services:
     depends_on:
       - medialab-orchestrator
     networks:
-      - medialab
+      - internal
     restart: unless-stopped
 
 networks:
-  medialab:
+  internal:
     driver: bridge
 
 volumes:
