@@ -12,11 +12,7 @@ lives in git log and in `ROADMAP-DONE.md`.
 
 ## Now
 
-Nothing in flight. No branch open, no half-finished work.
-
-Working tree: clean except `item-23-plugin-fileurl-spec.md` (uncommitted,
-docs-only back-annotation recording two build-time findings - the snapshot-diff
-hash readback, and that `medialab-contracts` needed no change for Tier A).
+Nothing in flight. No branch open, no half-finished work, clean working tree.
 
 ## Last done
 
@@ -45,7 +41,6 @@ ordering".
 
 ## Open threads
 
-- `item-23-plugin-fileurl-spec.md` diff is uncommitted.
 - Orphan-webhook cosmetic gap: a webhook with no matching job inserts
   `tmdb_id=0`, so RESOLVE_META resolves an empty title. Not on the normal path
   (a real `/download` submit creates the job with the true `tmdb_id`). Fix is a
