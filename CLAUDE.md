@@ -4,6 +4,17 @@ This file provides context for Claude Code when opened at the `medialab/` worksp
 
 Each subdirectory is an independent git repo. This root repo tracks only workspace-level docs.
 
+## Session resume - read this first
+
+**`STATE.md` is the session-resume snapshot.** Read it before anything else in
+this file: it says what is in flight, what was last finished, what is next, and
+what the live submodule pins are. It is rewritten (never appended) at the end of
+each working session, so it always describes the present.
+
+This file (`CLAUDE.md`) is the durable context: architecture, conventions,
+standards, and the live backlog. Completed roadmap and backlog items are
+archived in `ROADMAP-DONE.md` and are not repeated here.
+
 ---
 
 ## Architecture
@@ -70,69 +81,17 @@ workers) is the documented "at 100x load" answer, not the MVP.
 
 ## Roadmap order
 
-1. **medialab-jellyfin library endpoints** - scan trigger, add path, item search.
-   COMPLETE. PR merged, library router live on main.
-2. **torrent-downloader v1.1** - `media_type`-based save path resolution.
-   COMPLETE. PR merged, `media_type` on `POST /download` plus
-   `GET /transfers/{torrent_hash}/info` live on main.
-3. **engineering-standards backfill** - bring existing services up to the
-   "Engineering standards" section below. COMPLETE (2026-06-26). All three
-   services merged ruff + mypy + pre-commit + dependabot + full CI gate
-   (lint/format/typecheck/test/project-dep audit); medialab-bot gained its
-   first CI workflow. CVEs surfaced by the audit cleared (bumped
-   starlette/pydantic-settings/idna/aiohttp; diskcache CVE-2025-69872 ignored
-   by ID pending a fix). Root pins bumped. PRs: torrent-downloader #4,
-   medialab-bot #11, medialab-jellyfin #2.
-4. **medialab-contracts package** - shared Pydantic models (`MediaType`, error
-   shape, job/transfer DTOs). COMPLETE (2026-06-26). Repo + submodule live,
-   released **v0.1.0**, root pinned. Ships `MediaType` enum, `ErrorResponse`,
-   `CommonErrorCode` (six shared codes; services extend), `TransferInfo`,
-   `TransferHashInfo` (optional `tmdb_id` for v1.2). Consumed as a tag-pinned
-   uv git dependency (`[tool.uv.sources]` git + tag). Full design:
-   `medialab-contracts-spec.md`. Service migration folds torrent-downloader's
-   into v1.2; jellyfin + bot follow opportunistically.
-5. **torrent-downloader v1.2** - thread `tmdb_id` through `POST /download`,
-   cache `{media_type, host_path, tmdb_id}` vs hash, return `tmdb_id` from
-   `GET /transfers/{hash}/info`. COMPLETE (2026-06-26), released **v1.2.0**,
-   root pinned. `tmdb_id` required end to end (no backward-compat needed
-   pre-release). Migrated onto `medialab-contracts` v0.2.0 (shared `MediaType`,
-   `ErrorResponse`, `TransferInfo`, `TransferHashInfo`; `ErrorCode` bases its
-   shared members on `CommonErrorCode`). Unblocks the orchestrator's canonical
-   Title (Year) resolution.
-6. **medialab-orchestrator MVP** - front-door orchestrating gateway, NOT a
-   post-download relay. Bot talks only to the orchestrator; it brokers
-   search/download/status and the post-download pipeline, fanning out to
-   torrent-downloader + medialab-jellyfin (both become downstream workers).
-   SQLite job table spanning the full lifecycle, in-process asyncio worker,
-   qBittorrent completion webhook via a relay script, shared media-dir volume
-   for TV folder renames, `GET /jobs` observability. Core value prop.
-   Full design now lives in `medialab-orchestrator/CLAUDE.md` (the frozen-draft
-   spec was folded in at build time and removed). Depends on item 5 (v1.2). This MVP also absorbs the medialab-bot tech-debt cleanup
-   below (bot rewritten onto the single gateway dependency) and forces the root
-   `docker-compose.yml` (shared network + media mount) to land now.
-   **SERVICE COMPLETE (2026-06-26), released v0.1.0, submodule live + root
-   pinned.** Repo + submodule created (public, branch-protected on the `quality`
-   CI check, matching the other services). Ships the full gateway surface
-   (search proxies, `POST /download`, `GET /transfers` read-through merge,
-   `GET/POST /jobs*`, `GET /storage`, public aggregated health), the SQLite
-   `pipeline_job` store, the forward-retry asyncio worker, the keyed
-   `POST /webhooks/torrent-complete` + `scripts/notify_complete.py` relay, and
-   the PTN-season-only TV rename. Standards from commit one; consumes
-   `medialab-contracts` v0.2.0. Root `docker-compose.yml` + README landed.
-   Implementation decisions resolved from the spec's open questions: webhook is
-   keyed, DOWNLOADING is a read-through (no polling), PTN parses season only.
-   **ITEM 6 COMPLETE: the medialab-bot rewrite onto the gateway also landed**
-   (bot PR #15) - the bot now talks only to the orchestrator, dropped the
-   torrent-downloader/jellyfin URLs+keys, save-path config, and the direct
-   health check; `/torrent` removed, `/jobs` added, `tmdb_id`+`media_type`
-   threaded through download. Root pin bumped. The first whole-project
-   `docker compose build` + live verify is the user's next step.
-7. **medialab-bot Dockerfile** - so all services are containerized per Deployment.
-   COMPLETE (2026-06-26). Dockerfile + .dockerignore merged (bot PR #16),
-   two-stage uv with git for the contracts git-ref dep, non-root, no EXPOSE
-   (outbound-only client). Root pin bumped and the compose `medialab-bot`
-   service enabled. All four services are now Docker images. Next: the user's
-   first whole-project `docker compose build` + live verification.
+**Items 1-7 are COMPLETE.** Their detail, and the durable lessons from them, is
+archived in `ROADMAP-DONE.md`. Summary: jellyfin library endpoints,
+torrent-downloader `media_type` path resolution, the engineering-standards
+backfill, the `medialab-contracts` package, torrent-downloader `tmdb_id`
+threading, the orchestrator gateway MVP (plus the bot rewrite onto it), and the
+bot Dockerfile. All four services are containerized and the gateway owns the job
+pipeline.
+
+Items 8-9 below are the remaining unbuilt roadmap items. They were fast-follows
+after the MVP and are sequenced with the backlog (see "Backlog ordering").
+
 8. **medialab-setup CLI wizard** (new tool, not a microservice) - one-time
    pre-deployment setup: collects TMDB/Jellyfin/qBittorrent API keys with
    guided instructions for obtaining each, creates/selects movie+TV
@@ -261,39 +220,10 @@ Items 8-9 are fast-follows after the MVP (1-7); do not block the MVP on them.
     defensible (it names what the service *does*); the rename is cosmetic
     alignment, low priority. Mechanical, medium blast radius.
 
-16. **Wire the qBittorrent completion webhook (job pipeline advance).**
-    **CODE + WIRING-PROVEN COMPLETE (2026-07-20); one manual qB setting left to
-    the user.** The relay's runtime home was decided by the question "why build
-    host roots we migrate away in item 20?": the relay
-    (`scripts/notify_complete.py`) was rewritten **standalone + stdlib-only**
-    (`urllib`, no httpx, no package imports; orchestrator v0.4.1) so it runs as a
-    dropped-in single file on the host today AND unchanged inside the qBittorrent
-    container after item 20 - migration is just re-pointing one qB setting, no
-    throwaway infrastructure. Proven live: running the standalone relay from the
-    host (Python 3.13, no httpx) against the deployed gateway created a job that
-    advanced OFF `DOWNLOAD_SUBMITTED` through the worker (an orphan test hash
-    correctly reached FAILED at RESOLVE_META - the pipeline that never executed
-    before now executes). The only remaining step is the user setting
-    qBittorrent's "Run external program on torrent completion" to
-    `python "<path>\notify_complete.py" "%I" "%N"` with `ORCHESTRATOR_URL` +
-    `ORCHESTRATOR_API_KEY` in the qB process env - full instructions +
-    the Windows Defender write-lock note are in the orchestrator README. Poll
-    fallback stays documented but unneeded. **FIRST REAL END-TO-END RUN DONE
-    (2026-07-20):** the user wired the qB command, a real movie ("Weapons")
-    downloaded, the hook fired, and the pipeline advanced to DONE (SCAN =
-    Jellyfin `Media/Updated` 204). Two fallout fixes were needed and shipped:
-    (a) medialab-jellyfin's `.env` had `JELLYFIN_HOST=127.0.0.1` (itself)
-    instead of `host.docker.internal` (the host's Jellyfin) - config fix, the
-    original 500; (b) the per-download REGISTER step 404'd because the library
-    root is already registered - removed it (orchestrator v0.4.2, pipeline is
-    now RENAME -> SCAN). Item is functionally COMPLETE. Known cosmetic gap seen
-    during the test only because the DB was recreated mid-test: a webhook that
-    finds no matching job orphan-inserts with `tmdb_id=0`, so RESOLVE_META
-    resolves an empty title. In normal operation the `/download` submit creates
-    the job with the real `tmdb_id` and the webhook matches it, so the title
-    resolves - not a real-path bug, but the orphan title fallback (PTN-parse the
-    release name when `tmdb_id=0`) is a nice-to-have tied to item 21's
-    manual-job work.
+16. **Wire the qBittorrent completion webhook.** COMPLETE (2026-07-20), verified
+    live end to end. Detail in `ROADMAP-DONE.md`. One cosmetic gap remains open:
+    an orphan webhook (no matching job) inserts `tmdb_id=0`, so RESOLVE_META
+    resolves an empty title - fix is a PTN-parse title fallback, tied to item 21.
 17. **Show torrent download size in the picker.** The bot's resolution picker
     shows seeder count but not size. torrent-downloader's torrent search already
     returns `fileSize`; the bot's `TorrentResult` already carries `file_size`.
@@ -316,37 +246,10 @@ Items 8-9 are fast-follows after the MVP (1-7); do not block the MVP on them.
     pursued. Medium; do alongside or just after the webhook (16), since an
     always-on pipeline needs an always-on stack.
 
-19. **TV season/episode targeting in torrent search.** The show download flow
-    searches torrents by show title only, buckets by resolution, sorts by
-    seeders - so the latest season's packs (highest seeders) bury older seasons
-    and individual episodes are unreachable. Add season/episode targeting: the
-    bot reads the real season list from the existing TMDB show-detail endpoint
-    and presents a scope picker (whole series / a season / a single episode);
-    torrent-downloader refines the qBittorrent search `pattern` with an
-    `S0NE0M` tag and strictly drops PTN-parsed results that do not match the
-    requested season (complete-series and multi-season range packs kept as
-    labeled fallbacks so the set is never empty). `media_type` becomes a
-    required query param on `GET /search/torrents`. Spans four repos:
-    `medialab-contracts` (v0.3.0 - new `TorrentSearchScope` model), then
-    torrent-downloader (v1.3 - params + `filter_by_scope` + scope-aware cache
-    key), orchestrator (v0.2.0 - pass params through the proxy, no job-table
-    change), bot (v1.1.0 - the new scope-picker UI state for shows). Full design:
-    `tv-season-targeting-spec.md`. Decisions locked (granularity = season +
-    episode, season list from TMDB detail, strict drop-non-matching). Medium;
-    high user value - this is a real correctness gap in the core download path.
-    **COMPLETE (2026-07-02).** Shipped across all four repos: contracts v0.3.0
-    (`TorrentSearchScope`), torrent-downloader v1.3.0 (params + `filter_by_scope`
-    + scope-aware cache key + category from media_type), orchestrator v0.3.0
-    (proxy passthrough), bot v2.1.0 (`views/scope.py` season/episode pickers +
-    `run_torrent_search` helper). Root pins bumped. First live test (2026-07-17)
-    caught a cross-service path bug: torrent-downloader's TV detail route was
-    `/tmdb/tv/` while the orchestrator builds `/tmdb/show/` from
-    `MediaType.SHOW.value`, 404ing every show-detail call - the bot silently
-    fell back to whole-series search, hiding the scope picker. Fixed in
-    torrent-downloader v1.3.1 (route renamed to `/tmdb/show/`), verified
-    through the gateway (season list returns). Scope-picker UI still awaits a
-    live Discord pass. Lesson: mock-boundary tests never exercise cross-service
-    path contracts - each side's suite passed while the pair was broken.
+19. **TV season/episode targeting in torrent search.** COMPLETE (2026-07-02),
+    shipped across all four repos. Detail and the cross-service-path lesson in
+    `ROADMAP-DONE.md`; full design in `tv-season-targeting-spec.md`. The
+    scope-picker UI still awaits a live Discord pass.
 
 20. **Fully containerized, self-hostable stack.** Today the suite assumes
     host-installed qBittorrent + Jellyfin reached over `host.docker.internal`,
@@ -405,103 +308,36 @@ Items 8-9 are fast-follows after the MVP (1-7); do not block the MVP on them.
     contains no parentheses. Tiny.
 
 23. **Per-plugin `fileUrl` handling (magnet / .torrent URL / details page).**
-    **COMPLETE (2026-07-20), verified live.** All three tiers shipped:
-    downloader v1.4.0 (Tier A: `.torrent` URL passthrough + snapshot-diff hash
-    readback + `source_url` rename), orchestrator v0.4.0 (surrogate `job_id` PK
-    + nullable backfilled `torrent_hash` + hash stamping), bot v2.2.0
-    (`source_url` + job-id addressing), downloader v1.5.0 (Tier B: HTML
-    details-page magnet scraping via `services/source.py`). Tier C (resolution
-    `Other` bucket) was already v1.3.3. Root pins bumped, stack rebuilt, DB
-    volume recreated for the schema change. **Live finding: Tier B was the
-    load-bearing tier, not Tier A.** For real shows (Rick and Morty S8) every
-    seeded result is a limetorrents HTML page; the torlock `.torrent` results
-    Tier A recovers are near-zero-seed. Picker went from empty to 3 seeded
-    results (123/111/37 seeders) after Tier B; a real S8 page scrapes a valid
-    magnet. Original diagnosis retained below.
+    COMPLETE (2026-07-20), verified live. All tiers shipped. This was the true
+    root cause of the show-download gap (item 19's route and pattern fixes were
+    only the surface). Detail, the plugin-shape table, and the post-add
+    hash-caching design in `ROADMAP-DONE.md`; spec in
+    `item-23-plugin-fileurl-spec.md`.
 
-    The core correctness bug behind "shows return nothing": the search
-    pipeline assumes every qBittorrent search plugin returns a magnet in
-    `fileUrl`, but the plugins return three different shapes, and
-    `filter_and_sort_results` drops anything that is not `magnet:?`. Observed
-    live (2026-07-17):
-
-    | Engine | `fileUrl` shape | Handling needed |
-    |---|---|---|
-    | piratebay | `magnet:?xt=...` | none - works today |
-    | torlock | `.torrent` file URL (`/tor/NNN.torrent`, `application/x-bittorrent`) | pass URL straight to `torrents_add(urls=...)` - qBittorrent fetches it |
-    | limetorrents | HTML details page | fetch page + scrape `magnet:?xt=urn:btih:...` (confirmed present) |
-
-    (A jackett plugin row also appeared as an error - Jackett is a separate app
-    not running on this host; it is deliberately NOT part of this item and not
-    on the backlog. Ignore its rows.)
-
-    Popular movies work because piratebay indexes them (magnets); older/niche
-    TV (e.g. The Simpsons S23) returns only torlock+limetorrents, 100% of which
-    the magnet-only filter discards - empty picker despite ~24 raw hits.
-
-    Three independent tiers, each shippable alone, sequence by value/risk:
-    - **Tier A - `.torrent` URL passthrough** (biggest win, lowest risk). Stop
-      dropping `fileUrl`s that are `.torrent` links; pass them to
-      `torrents_add`. Recovers torlock. Alone this unblocks the Simpsons case.
-    - **Tier B - details-page scrape** (fragile). For an HTML `fileUrl`, fetch
-      the page (behind the VPN, inside torrent-downloader) and regex the
-      magnet. Recovers limetorrents. Generic `magnet:?xt=` scrape covers both
-      scraper sites; no per-site parser needed so far.
-    - **Tier C - resolution-`Other` bucket.** DONE (torrent-downloader v1.3.3):
-      untagged/SD results no longer dropped by `group_by_resolution`. This
-      alone was necessary but not sufficient - the magnet filter upstream still
-      dropped everything for the TV case.
-
-    **The real design work is hash caching, not the add itself.** Today
-    `POST /download` extracts the BTIH hash from the input magnet to cache
-    `{media_type, host_path, tmdb_id}` against it (the orchestrator looks it up
-    at completion). A `.torrent` URL or scraped page does not carry the hash up
-    front, so caching must move to *after* the add - read the hash back from
-    qBittorrent (`torrents_add` does not return it; look it up by the just-added
-    torrent) and cache then. This is the crux and why it is spec-first, not an
-    inline patch. Likely threads `engineName`/url-kind through search results so
-    the download side knows how to handle the chosen `fileUrl`. Spans
-    contracts (download DTO field for the URL kind), torrent-downloader
-    (filter + add + post-add hash cache), possibly the gateway/bot if the
-    picker must carry the kind. Medium; high value - this is the true root
-    cause of the show-download gap, of which items 19's route/pattern fixes
-    and Tier C were only the surface. Spec-first. **Spec drafted
-    (`item-23-plugin-fileurl-spec.md`), decisions locked:** surrogate `job_id`
-    PK with a nullable backfilled `torrent_hash` (decouples job identity from
-    the torrent source), and `magnet_uri` -> `source_url` (accepts magnet or
-    `.torrent` URL). That spec covers Tier A + the keying change only; Tier B
-    (page scrape) stays backlog. Awaiting approval before code.
-
-### Backlog ordering (agreed 2026-06-29)
+### Backlog ordering
 
 The backlog items above are numbered by when they were raised, not by priority.
-Execution order:
+Items 16, 19, and 23 are complete and no longer appear in this queue. Remaining
+execution order:
 
-1. **16 - wire the qBittorrent completion webhook.** Do next, immediately. Not a
-   feature - the post-download pipeline never runs end to end without it, so the
-   whole orchestration value is untested live. Treat as a blocker.
-2. **18 - uptime / autostart.** Pair with 16: an always-on pipeline needs an
-   always-on stack (containers on boot + host apps up).
-3. **17 - show torrent size**, then **13 - `/stop-seeding` command.** Two small,
-   isolated quick wins to clear after the keystone. Note 17 edits the same bot
-   torrent-picker Select that 19 reworks - if 19 is in flight, fold 17's
-   size-in-description into 19's picker pass rather than doing it twice.
-4. **Reliability: 19 - TV season/episode targeting**, then **11 - full Jellyfin
-   naming**, then **10 - stuck/failed remediation.** Make the core download +
-   organize loop correct and robust before adding features. (19 fixes which
-   torrent the user can even get; 11 refines the post-download rename; 10
-   hardens it.) 19 spans four repos (contracts -> downloader -> orchestrator
-   -> bot) and is the largest of the three; sequence it first because a wrong
-   download makes the downstream naming/remediation moot.
-5. **Setup polish: 9 - `/settings` cog**, then **14 - storage-threshold
+1. **18 - uptime / autostart.** Next. Pairs with the now-complete webhook (16):
+   an always-on pipeline needs an always-on stack (containers on boot + host
+   apps up).
+2. **17 - show torrent size**, then **13 - `/stop-seeding` command.** Two small,
+   isolated quick wins.
+3. **Reliability: 11 - full Jellyfin naming**, then **10 - stuck/failed
+   remediation.** Make the core download and organize loop correct and robust
+   before adding features (11 refines the post-download rename; 10 hardens it).
+   The third member of this block, 19, is already done.
+4. **Setup polish: 9 - `/settings` cog**, then **14 - storage-threshold
    warning** (14 depends on 9's settings store), then **8 - medialab-setup
    wizard.** Build 8 before sharing the project / portfolio use - it owns the
    config-duplication chore ([[chore_config_layout]]) and makes the suite
    installable by others. Not urgent for personal use (working `.env` files
    already exist).
-6. **12 - RSS watchlist + auto-download.** The marquee feature and the largest;
+5. **12 - RSS watchlist + auto-download.** The marquee feature and the largest;
    the last big push. Wants 9's settings store for per-show quality filters.
-7. **15 - rename torrent-downloader -> medialab-downloader.** Cosmetic alignment,
+6. **15 - rename torrent-downloader -> medialab-downloader.** Cosmetic alignment,
    lowest priority; do when quiet (or not at all - the historical name is
    defensible).
 
@@ -509,19 +345,12 @@ Soft prerequisites: item 9 (settings store) precedes 14 and 12's per-show
 filters. Otherwise items are independent and the order is preference, not
 hard dependency.
 
-Added 2026-07-13, not yet sequenced: **21 - `/torrent` re-add** (spec-first,
-job-model question; natural slot is after the reliability block, since it
-branches the pipeline that 10/11 harden) and **22 - bare-year search pattern**
-(verify-only guard, fold into whichever item next touches the search-pattern
-path).
-
-Added 2026-07-17: **23 - per-plugin `fileUrl` handling** jumps near the front
-of the reliability block, alongside/just after item 19 - it is the true root
-cause of the show-download gap (item 19's route + pattern fixes and the
-resolution-`Other` bucket were only the surface; the magnet-only filter still
-drops all torlock/limetorrents TV results). Do Tier A (`.torrent` URL
-passthrough) as the immediate high-value slice - it unblocks TV downloads for
-the common case with the lowest risk.
+Unsequenced: **21 - `/torrent` re-add** (spec-first, job-model question; natural
+slot is after the reliability block, since it branches the pipeline that 10 and
+11 harden) and **22 - bare-year search pattern** (verify-only guard, fold into
+whichever item next touches the search-pattern path). Item 20 (full
+containerization) is spec-reviewed but parked - it is a large lift that overlaps
+8 and 18.
 
 ## Session start - check submodule state
 
