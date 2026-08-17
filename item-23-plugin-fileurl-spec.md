@@ -62,8 +62,15 @@ by `job_id`, and the hash is stamped in when it becomes known.
 - **magnet source:** immediately (parse btih from the URI, as today). Stamp at
   submit.
 - **`.torrent` URL source:** after `torrents_add`. torrent-downloader reads the
-  hash back from qBittorrent (match the just-added torrent) and returns it in
-  the `POST /download` response. Gateway stamps it onto the job.
+  hash back from qBittorrent by **snapshot diff** (decision 2026-07-20): capture
+  the set of torrent hashes via `torrents_info()` before the add, capture again
+  after, the newly-present hash is the added torrent. Deterministic under
+  concurrent adds (no `added_on` timestamp race, no fuzzy name matching), and it
+  is qBittorrent's own computed info-hash so it matches the completion `%I`
+  exactly. Edge cases: empty diff (qB deduped an already-present torrent, or add
+  failed) -> no hash, log and continue (webhook backstops); diff > 1 (a
+  genuinely concurrent add slipped in) -> cannot disambiguate, log and continue.
+  Returned in the `POST /download` response so the gateway can stamp the job.
 - **fallback / either case:** the completion webhook always carries the real
   hash (`%I`). If a job still has a null hash at completion (add-readback
   failed), the webhook backfills it. This makes the readback best-effort, not a
@@ -71,16 +78,16 @@ by `job_id`, and the hash is stamped in when it becomes known.
 
 ## Changes by repo
 
-### medialab-contracts (shared models - bump minor)
+### medialab-contracts (NO CHANGE - verified 2026-07-20)
 
-- `DownloadRequest`-shaped DTO (if present here) / the download field: rename
-  `magnet_uri` -> `source_url: str`. If a `url_kind` enum is wanted later it is
-  additive; this spec sniffs shape in the downloader and does NOT add the enum
-  (keep contract surface small).
-- Job/transfer DTOs that expose `torrent_hash` must allow it to be `None`
-  (a job may exist before its hash is known). `JobView` / `TransferInfo`
-  reviewed for `torrent_hash: str | None`.
-- Tag a new minor; every consumer repins.
+Reviewed at build time: contracts owns no download request DTO and no job DTO.
+`DownloadRequest` and `JobView` are service-local in the orchestrator and
+mirrored in the bot (deliberately never shared - job DTOs were kept out of
+contracts). The only hash-bearing shared model is `TransferInfo.hash`, a live
+qBittorrent transfer snapshot that always has a hash - it does not need to go
+nullable. `TransferHashInfo` is looked up by hash but carries none. So the
+`source_url` rename and the nullable-hash change are entirely service-local;
+contracts is not touched and does not need a version bump for Tier A.
 
 ### torrent-downloader (downloader - bump minor)
 
