@@ -268,12 +268,25 @@ Items 8-9 are fast-follows after the MVP (1-7); do not block the MVP on them.
     WireGuard tunnel; qBittorrent routes through it; gluetun's firewall is the
     automatic leak-proof kill-switch. (3) **User supplies a WireGuard config
     file, never a VPN password** (comfort + safety). (4) torrent-downloader's
-    hardcoded `NordLynx` check becomes configurable (never relaxable). (5) seed
-    stops N minutes after 100% (configurable, default 0). Overlaps item 8 (setup
-    wizard collects the WireGuard file + keys) and item 18 (autostart/uptime).
-    Spec-first; medium-large; 4 open questions remain in the spec. A dev/staging
-    environment model folds into this item (see "Environments" - deferred for a
-    solo user for now).
+    hardcoded `NordLynx` check becomes configurable (never relaxable) -
+    **partly delivered ahead of this item** (torrent-downloader PR #21): the
+    interface is now a fail-closed comma-separated `VPN_INTERFACES` allowlist,
+    not a hardcoded default arg. What remains here is pointing it at gluetun's
+    interface. (5) seed stops N minutes after 100% (configurable, default 0).
+    Overlaps item 8 (setup wizard collects the WireGuard file + keys) and item
+    18 (autostart/uptime). Spec-first; medium-large; 4 open questions remain in
+    the spec. A dev/staging environment model folds into this item (see
+    "Environments" - deferred for a solo user for now).
+
+    **Host reality check (observed 2026-08-19):** this host now runs *two*
+    interfaces matching the old `NordLynx` assumption - `NordLynx` (personal
+    NordVPN) and `NordLayer-NordLynx` (employer NordLayer) - and NordLayer
+    installs `0.0.0.0/1` + `128.0.0.0/1` at metric 0, so it wins general egress
+    even while qBittorrent is bound to `NordLynx`. A single-interface binding
+    check therefore cannot tell you which tunnel traffic actually took; binding
+    and routing are separate facts. Item 20's design must not assume one
+    tunnel, and the "which interface" question is about routing, not just the
+    qBittorrent preference.
 
 21. **Re-add `/torrent` (custom torrent search, no TMDB).** Bring back a bot
     command that searches torrents by raw query, completely skipping TMDB -
