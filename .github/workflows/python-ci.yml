@@ -1,0 +1,71 @@
+# Reusable quality gate for every medialab Python repo.
+#
+# Callers (each service's .github/workflows/ci.yml) invoke this with
+# `uses: MickMarch/medialab/.github/workflows/python-ci.yml@<ref>`. The step
+# order is the workspace standard: ruff check -> ruff format --check -> mypy ->
+# pytest -> dependency audit. Change it here once, never per service.
+name: Python CI (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      exclude-audit-package:
+        description: >
+          A git-sourced dependency to drop from the pip-audit export (it is
+          audited in its own CI and pip-audit cannot hash VCS lines).
+        type: string
+        default: ""
+      audit-ignore-vulns:
+        description: >
+          Space-separated CVE ids to ignore in pip-audit. Each must have a
+          comment in the caller explaining why.
+        type: string
+        default: ""
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # hatch-vcs derives the version from tags; needs full history.
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+      - name: Mypy
+        run: uv run mypy src
+
+      - name: Tests
+        run: uv run pytest
+
+      - name: Dependency audit
+        env:
+          EXCLUDE: ${{ inputs.exclude-audit-package }}
+          IGNORE: ${{ inputs.audit-ignore-vulns }}
+        # Audit the resolved project dependencies, not the isolated tool env.
+        run: |
+          set -euo pipefail
+          exclude_args=()
+          if [ -n "$EXCLUDE" ]; then
+            exclude_args=(--no-emit-package "$EXCLUDE")
+          fi
+          uv export --no-emit-project "${exclude_args[@]}" \
+            --format requirements-txt > requirements.audit.txt
+          # pip-audit cannot hash VCS or editable lines; only PyPI deps need a CVE audit.
+          grep -vE '@ git\+|^-e ' requirements.audit.txt > requirements.audit.pypi.txt || true
+          ignore_args=()
+          for cve in $IGNORE; do
+            ignore_args+=(--ignore-vuln "$cve")
+          done
+          uvx pip-audit -r requirements.audit.pypi.txt "${ignore_args[@]}"

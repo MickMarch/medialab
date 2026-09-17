@@ -1,0 +1,25 @@
+# Root workspace CI: the tooling-drift gate across submodules plus shell lint.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Tooling drift check
+        run: bin/medialab-drift.sh
+
+      - name: Shellcheck
+        run: shellcheck bin/*.sh

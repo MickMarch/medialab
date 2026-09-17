@@ -10,7 +10,8 @@
 # submodule pin you just advanced.
 set -euo pipefail
 
-REPO_ROOT="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel)"
+# shellcheck source=lib.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 "${REPO_ROOT}/bin/medialab-versions.sh"
 

@@ -7,11 +7,11 @@
 #   latest  - newest tag on the submodule's origin (is a release available)
 #
 # A clean stack has local == built == running and local == the newest tag.
-# Divergence flags: code changed but not rebuilt, an old image still running,
-# or an unreleased/unpulled tag upstream.
+# Service names, image names and *_VERSION vars come from the compose file.
 set -euo pipefail
 
-REPO_ROOT="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel)"
+# shellcheck source=lib.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 cd "${REPO_ROOT}"
 
 LABEL=org.opencontainers.image.version
@@ -20,21 +20,6 @@ LABEL=org.opencontainers.image.version
 # image to look for. Absent, it falls back to :latest.
 # shellcheck disable=SC1091
 [ -f "${REPO_ROOT}/.versions.env" ] && . "${REPO_ROOT}/.versions.env"
-
-declare -A SERVICES=(
-  [torrent-downloader]=medialab/torrent-downloader
-  [medialab-jellyfin]=medialab/medialab-jellyfin
-  [medialab-orchestrator]=medialab/medialab-orchestrator
-  [medialab-bot]=medialab/medialab-bot
-)
-
-# submodule path -> the *_VERSION var name generated into .versions.env
-declare -A VERVAR=(
-  [torrent-downloader]=TORRENT_DOWNLOADER_VERSION
-  [medialab-jellyfin]=MEDIALAB_JELLYFIN_VERSION
-  [medialab-orchestrator]=MEDIALAB_ORCHESTRATOR_VERSION
-  [medialab-bot]=MEDIALAB_BOT_VERSION
-)
 
 na() { [ -n "$1" ] && echo "$1" || echo "-"; }
 
@@ -52,8 +37,7 @@ label_of() {
   [ -z "${out}" ] && echo "unlabeled" || echo "${out}"
 }
 
-# Prefer the version-tagged image; fall back to :latest so the current
-# (pre-labeling) stack still shows up as built.
+# Prefer the version-tagged image; fall back to :latest.
 built_ver() {
   local image="$1" tagged="$2"
   if docker image inspect "${image}:${tagged}" >/dev/null 2>&1; then
@@ -82,14 +66,15 @@ printf '%-24s %-20s %-9s %-14s %-14s %-10s\n' \
 printf '%-24s %-20s %-9s %-14s %-14s %-10s\n' \
   ------- ----- ------ ----- ------- ----------
 
-for path in torrent-downloader medialab-jellyfin medialab-orchestrator medialab-bot; do
-  image="${SERVICES[$path]}"
-  tagged="${!VERVAR[$path]:-dev}"
+while IFS= read -r svc; do
+  image="$(medialab_image "${svc}")"
+  var="$(medialab_version_var "${svc}")"
+  tagged="${!var:-dev}"
   printf '%-24s %-20s %-9s %-14s %-14s %-10s\n' \
-    "$path" \
-    "$(na "$(local_ver "$path")")" \
-    "$(na "$(pinned_sha "$path")")" \
-    "$(na "$(built_ver "$image" "$tagged")")" \
-    "$(na "$(running_ver "$path")")" \
-    "$(na "$(latest_tag "$path")")"
-done
+    "${svc}" \
+    "$(na "$(local_ver "${svc}")")" \
+    "$(na "$(pinned_sha "${svc}")")" \
+    "$(na "$(built_ver "${image}" "${tagged}")")" \
+    "$(na "$(running_ver "${svc}")")" \
+    "$(na "$(latest_tag "${svc}")")"
+done < <(medialab_services)
