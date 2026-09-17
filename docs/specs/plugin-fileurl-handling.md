@@ -1,16 +1,13 @@
 # Item 23 spec - per-plugin `fileUrl` handling + surrogate job key
 
-Status: DRAFT for approval. Spec-first per workspace workflow; no code until
-this is approved. Do NOT predict version numbers here (choose at release from
-the last tag + change kind).
+Status: Shipped (2026-07-20, verified live). Lesson: `docs/decisions/0002-plugin-fileurl-tiers.md`.
 
 ## Problem
 
 qBittorrent search plugins return three different `fileUrl` shapes, but the
 pipeline assumes every result is a magnet and drops the rest, so content only
 indexed by the non-magnet plugins (older/niche TV) returns an empty picker even
-when viable, well-seeded torrents exist. Diagnosed live 2026-07-17. See root
-`CLAUDE.md` item 23 and `API-KEYS.md`; memory `plugin_fileurl_shapes`.
+when viable, well-seeded torrents exist. Diagnosed live 2026-07-17.
 
 Observed shapes:
 

@@ -1,9 +1,8 @@
 # Spec: TV season/episode targeting for torrent search
 
-Status: DONE (shipped 2026-07-02). Released as contracts v0.3.0,
-torrent-downloader v1.3.0, orchestrator v0.3.0, bot v2.1.0.
+Status: Shipped (2026-07-02). Lessons: `docs/decisions/0001-cross-service-path-contracts.md`,
+`docs/decisions/0004-no-version-prediction.md`.
 Date: 2026-06-30
-Roadmap: backlog item 19.
 
 > Note: the per-repo version numbers written below were predictions made while
 > drafting. Two missed - orchestrator shipped v0.3.0 (v0.2.0 was already taken)

@@ -1,9 +1,10 @@
 # Spec: containerized self-hostable stack + VPN enforcement
 
-Status: DRAFT (awaiting approval)
+Status: Draft
+Issue: MickMarch/medialab#28
 Date: 2026-07-02
-Roadmap: backlog item 20 (fully containerized, self-hostable stack). Absorbs the
-VPN-enforcement hardening. Spec-first; no code until approved.
+
+Absorbs the VPN-enforcement hardening. Spec-first; no code until Approved.
 
 ## Hard invariant (non-negotiable)
 
