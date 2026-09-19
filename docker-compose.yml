@@ -79,16 +79,12 @@ services:
     image: medialab/medialab-bot:${MEDIALAB_BOT_VERSION:-dev}
     env_file:
       - ./medialab-bot/.env
-    # Explicit public resolvers. The bot is the only service that resolves a
-    # public name (gateway.discord.gg); the others resolve compose service names
-    # and host.docker.internal, which Docker's embedded resolver answers itself.
-    # That embedded resolver forwards public lookups to the host, and the host's
-    # VPN tunnels cycling take the forwarding path down - producing bursts of
-    # "Temporary failure in name resolution" and gateway reconnects. Resolving
-    # directly skips the broken hop.
-    dns:
-      - 1.1.1.1
-      - 8.8.8.8
+    # DNS deliberately follows Docker's embedded resolver (and so the host).
+    # Pinning public resolvers here (1.1.1.1 / 8.8.8.8) was tried on 2026-08-17
+    # to survive host VPN tunnels cycling; with a VPN that blocks direct
+    # UDP/53 egress from containers it instead broke every Discord lookup and
+    # crash-looped the bot (2026-09-19). Only the host's resolver tracks the
+    # host's VPN state, so the bot must not override it.
     depends_on:
       - medialab-orchestrator
     networks:
