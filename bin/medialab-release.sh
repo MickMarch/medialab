@@ -21,7 +21,7 @@ set -euo pipefail
 usage() { echo "usage: $0 <repo> <major|minor|patch> [--dry-run]" >&2; exit 2; }
 
 REPO="${1:-}"; KIND="${2:-}"; DRY="${3:-}"
-[ -n "${REPO}" ] && [ -n "${KIND}" ] || usage
+if [ -z "${REPO}" ] || [ -z "${KIND}" ]; then usage; fi
 case "${KIND}" in major|minor|patch) ;; *) usage ;; esac
 [ -z "${DRY}" ] || [ "${DRY}" = "--dry-run" ] || usage
 DIR="${REPO_ROOT}/${REPO}"
@@ -60,7 +60,7 @@ fi
 
 echo "${REPO}: ${last} -> ${TAG} (${KIND}) on ${TODAY}"
 echo "Unreleased entries:"
-echo "${unreleased}" | sed 's/^/  /'
+while IFS= read -r line; do echo "  ${line}"; done <<< "${unreleased}"
 
 if [ -z "${DRY}" ]; then
   python - "${CHANGELOG}" "${VERSION}" "${TODAY}" <<'PY'
