@@ -1,6 +1,6 @@
 # Spec: uptime and autostart for the whole stack
 
-Status: Draft
+Status: Approved
 Issue: MickMarch/medialab#16
 
 ## Problem
@@ -72,11 +72,13 @@ needed here.
 - **qBittorrent:** unchanged. It already starts at login, which (a) turns into
   boot. It must keep running in the interactive session because its Web UI
   and search plugins live in the GUI process.
-- **Jellyfin:** reinstall with the installer's **"Install as a Windows
-  Service"** option (same version, same data directory, so libraries and
-  metadata are untouched). The service starts at boot regardless of login and
-  survives a logoff; the tray app becomes optional. This removes the one
-  dependency the pipeline has on a GUI process being alive on the host.
+- **Jellyfin:** register `jellyfin.exe --service` as a Windows service with
+  `sc.exe`, pointed at the data directory the tray-launched server already
+  uses (`C:\ProgramData\Jellyfin\Server`), so libraries and metadata are
+  untouched and no reinstall is needed. The service starts at boot regardless
+  of login and survives a logoff; the tray is removed from login startup so
+  two servers never fight over the port. This removes the one dependency the
+  pipeline has on a GUI process being alive on the host.
 
 ### 3. Verification: a doctor script
 
@@ -114,13 +116,15 @@ automated by the workspace; each is a one-time host action.
 4. Doctor script is read-only. Rejected an auto-remediation script: starting
    things is what autostart is for; the doctor tells you which layer failed.
 5. Wake-on-LAN deferred (non-goal above).
+6. Automatic logon accepted for this single-user machine at home (see Open
+   questions).
 
 ## Open questions
 
-1. Is automatic logon acceptable on this machine? It means anyone who can
-   power the PC on gets a logged-in-but-locked session. The lock task closes
-   the desktop within seconds of logon; the account password still gates the
-   lock screen.
+None. Automatic logon was accepted on 2026-09-21: anyone who can power the
+PC on gets a logged-in-but-locked session; the lock task closes the desktop
+within seconds of logon and the account password still gates the lock
+screen. Recorded as decision 6.
 
 ## Test plan
 
@@ -136,7 +140,7 @@ No service code changes, so no unit tests. Acceptance is a live check:
 ## Rollout
 
 1. Root PR: `bin/medialab-doctor.sh` + `docs/host-setup.md` + this spec.
-2. Host: Jellyfin service reinstall, Autologon, lock task. Each step has a
+2. Host: Jellyfin service registration, Autologon, lock task. Each step has a
    verification line in `docs/host-setup.md`.
 3. Reboot test per the test plan; record the result on the issue; spec to
    Shipped.

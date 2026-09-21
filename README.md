@@ -113,7 +113,8 @@ Editing a `.env` after the stack is up takes effect only on recreate:
 qBittorrent's "Run external program on torrent completion" must invoke the
 orchestrator's standalone relay, `scripts/notify_complete.py`, so finished
 downloads enter the post-download pipeline. Setup is in the
-[orchestrator README](medialab-orchestrator/README.md).
+[orchestrator README](medialab-orchestrator/README.md). Making the whole stack
+start with the machine: [docs/host-setup.md](docs/host-setup.md).
 
 ## Versions and images
 
@@ -129,6 +130,7 @@ version as the `APP_VERSION` build arg, which each Dockerfile bakes in as the
 | `bin/medialab-status.sh` | skew table: local / pinned / built / running / latest tag |
 | `bin/medialab-release.sh <repo> <major\|minor\|patch>` | cut a release: date the changelog, tag, push, bump the root pin |
 | `bin/medialab-drift.sh` | fail if shared tooling config differs between repos |
+| `bin/medialab-doctor.sh` | is the stack up: engine, containers, host apps, gateway health, bot login |
 
 Service names, image names and `*_VERSION` variables are derived from
 `docker-compose.yml` by `bin/lib.sh`. Adding a service means adding it to the
