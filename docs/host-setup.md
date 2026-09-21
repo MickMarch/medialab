@@ -100,9 +100,23 @@ Verify: `(Get-Content "$env:APPDATA\Docker\settings-store.json" -Raw | ConvertFr
 - The containers carry `restart: unless-stopped`; they return with the engine.
 - Power plan: sleep on AC is never, hibernate off, wake timers allowed.
 
+## 5. Post-logon self-check (optional)
+
+A user task runs the doctor four minutes after logon and writes
+`.doctor-boot.log` (gitignored) in the repo, so a reboot leaves evidence
+without anyone at the keyboard:
+
+```powershell
+$bash    = "C:\Program Files\Gitinash.exe"
+$action  = New-ScheduledTaskAction -Execute $bash -Argument "-lc 'cd /c/Users/Shadow/projects/personal/medialab && { date; bin/medialab-doctor.sh; echo exit=`$?; } > .doctor-boot.log 2>&1'"
+$trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"; $trigger.Delay = "PT4M"
+Register-ScheduledTask -TaskName "medialab-doctor-after-logon" -Action $action -Trigger $trigger -RunLevel Limited -Force
+```
+
 ## Acceptance
 
 Reboot and do not touch the keyboard. Within five minutes
-`bin/medialab-doctor.sh` is all `ok` (run it over SSH, or ask the bot
-`/storage` from Discord). A logoff is not a reboot: Jellyfin (SYSTEM task) survives it,
+`bin/medialab-doctor.sh` is all `ok` (read `.doctor-boot.log`, run it over
+SSH, or ask the bot `/storage` from Discord). Passed on this host 2026-09-21:
+logon +21 s, lock +43 s, full stack by about +1 min. A logoff is not a reboot: Jellyfin (SYSTEM task) survives it,
 Docker and qBittorrent do not, by design.

@@ -1,6 +1,6 @@
 # Spec: uptime and autostart for the whole stack
 
-Status: Approved
+Status: Shipped (2026-09-21). Lesson: `docs/decisions/0007-boot-scoped-not-login-scoped.md`.
 Issue: MickMarch/medialab#16
 
 ## Problem
@@ -121,11 +121,11 @@ automated by the workspace; each is a one-time host action.
 4. Doctor script is read-only. Rejected an auto-remediation script: starting
    things is what autostart is for; the doctor tells you which layer failed.
 5. Wake-on-LAN deferred (non-goal above).
+6. Automatic logon accepted for this single-user machine at home (see Open
+   questions).
 7. Docker Desktop's own `AutoStart` setting is the switch, not its `Run`
    entry. Found on the first reboot test: with the setting off the app quits
    at logon even though the `Run` entry launched it.
-6. Automatic logon accepted for this single-user machine at home (see Open
-   questions).
 
 ## Open questions
 
@@ -152,3 +152,10 @@ No service code changes, so no unit tests. Acceptance is a live check:
    verification line in `docs/host-setup.md`.
 3. Reboot test per the test plan; record the result on the issue; spec to
    Shipped.
+
+## Result
+
+Second reboot, 2026-09-21 17:35:53, hands off the keyboard: autologon at
++21 s, lock task at +43 s, engine and all four containers up by about
++1 min, doctor task at +4:47 all `ok` (bot logged in, gateway reporting both
+workers). Recorded on MickMarch/medialab#16.
