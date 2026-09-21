@@ -35,3 +35,6 @@ Thumbs.db
 
 # Node (for any JS tooling at root)
 node_modules/
+
+# Written by the medialab-doctor-after-logon scheduled task; transient.
+.doctor-boot.log
