@@ -121,6 +121,9 @@ automated by the workspace; each is a one-time host action.
 4. Doctor script is read-only. Rejected an auto-remediation script: starting
    things is what autostart is for; the doctor tells you which layer failed.
 5. Wake-on-LAN deferred (non-goal above).
+7. Docker Desktop's own `AutoStart` setting is the switch, not its `Run`
+   entry. Found on the first reboot test: with the setting off the app quits
+   at logon even though the `Run` entry launched it.
 6. Automatic logon accepted for this single-user machine at home (see Open
    questions).
 

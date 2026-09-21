@@ -73,12 +73,31 @@ Verify: `Get-ScheduledTask medialab-lock-at-logon` is `Ready`;
 `(Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon").AutoAdminLogon`
 is `1`.
 
-## 3. Things already right, left alone
+## 3. Docker Desktop: its own autostart switch must be on
+
+Docker Desktop keeps a `Run` entry at `HKCU\...\Run` but honours its own
+setting, `AutoStart` in `%APPDATA%\Docker\settings-store.json`, over that
+entry. With `AutoStart: false` the app exits immediately at logon and nothing
+in the Docker layer comes up. Turn it on in Docker Desktop: **Settings >
+General > Start Docker Desktop when you sign in to your computer**. Or, with
+Docker Desktop fully quit, flip the one key by text edit:
+
+```powershell
+$f = "$env:APPDATA\Docker\settings-store.json"
+[IO.File]::WriteAllText($f, ([IO.File]::ReadAllText($f) -replace '"AutoStart"\s*:\s*false', '"AutoStart": true'), (New-Object System.Text.UTF8Encoding($false)))
+```
+
+Do not round-trip that file through `ConvertFrom-Json | ConvertTo-Json` in
+Windows PowerShell 5.1; it drops keys and Docker Desktop then refuses to start
+with a settings-loading error.
+
+Verify: `(Get-Content "$env:APPDATA\Docker\settings-store.json" -Raw | ConvertFrom-Json).AutoStart` is `True`.
+
+## 4. Things already right, left alone
 
 - qBittorrent starts at logon from `HKCU\...\Run` and must stay a GUI process
   (its Web UI and search plugins live there).
-- Docker Desktop starts at logon from `HKCU\...\Run`; the containers carry
-  `restart: unless-stopped`.
+- The containers carry `restart: unless-stopped`; they return with the engine.
 - Power plan: sleep on AC is never, hibernate off, wake timers allowed.
 
 ## Acceptance
