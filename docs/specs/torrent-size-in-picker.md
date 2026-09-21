@@ -1,6 +1,6 @@
 # Spec: torrent download size in the picker
 
-Status: Draft
+Status: Approved
 Issue: MickMarch/medialab#17
 
 ## Problem

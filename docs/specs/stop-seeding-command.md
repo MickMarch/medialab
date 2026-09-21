@@ -1,6 +1,6 @@
 # Spec: /stop-seeding command
 
-Status: Draft
+Status: Approved
 Issue: MickMarch/medialab#18
 
 ## Problem
