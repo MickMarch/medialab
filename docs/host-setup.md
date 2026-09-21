@@ -13,34 +13,42 @@ Every row `ok` means the stack is up: Docker engine, the four containers,
 qBittorrent's Web UI, Jellyfin, the gateway with both workers reachable, and
 the bot logged in to Discord.
 
-## 1. Jellyfin as a Windows service
+## 1. Jellyfin at boot as a SYSTEM scheduled task
 
-Jellyfin ships a `--service` mode. Register it as a service that starts at
-boot, using the same data directory the tray-launched server already uses
-(`C:\ProgramData\Jellyfin\Server`), so libraries and metadata are untouched.
-Run in an elevated PowerShell:
-
-```powershell
-sc.exe create JellyfinServer binPath= "\"C:\Program Files\Jellyfin\Server\jellyfin.exe\" --service --datadir \"C:\ProgramData\Jellyfin\Server\"" start= auto DisplayName= "Jellyfin Server"
-sc.exe description JellyfinServer "Jellyfin media server (medialab)"
-sc.exe failure JellyfinServer reset= 86400 actions= restart/5000/restart/30000/restart/60000
-```
-
-Then stop the tray-launched instance and start the service:
+Jellyfin's `--service` flag runs headless but does not perform the Windows
+Service Control Manager handshake: registered with `sc.exe`, it logs
+`Startup complete` and is then killed at the 30 s timeout (event 7009). The
+official installer works around that with NSSM. Without adding a download, the
+boot-scoped equivalent is a Task Scheduler task running as `SYSTEM` at startup
+with restart-on-failure, pointed at the data directory the tray-launched server
+already uses (`C:\ProgramData\Jellyfin\Server`) so libraries and metadata are
+untouched. Run in an elevated PowerShell:
 
 ```powershell
-Stop-Process -Name Jellyfin.Windows.Tray -Force; Stop-Process -Name jellyfin -Force
-Start-Service JellyfinServer
+$action    = New-ScheduledTaskAction -Execute "C:\Program Files\Jellyfin\Server\jellyfin.exe" -Argument '--service --datadir "C:\ProgramData\Jellyfin\Server"' -WorkingDirectory "C:\Program Files\Jellyfin\Server"
+$trigger   = New-ScheduledTaskTrigger -AtStartup
+$principal = New-ScheduledTaskPrincipal -UserId "NT AUTHORITY\SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+$settings  = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 5 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Seconds 0) -MultipleInstances IgnoreNew
+Register-ScheduledTask -TaskName "medialab-jellyfin-server" -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force
 ```
 
-Remove the tray from login startup so two servers never fight over the port:
+Then hand over from the tray-launched instance and start the task:
 
 ```powershell
-Remove-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name JellyfinTray
+Get-Process Jellyfin.Windows.Tray, jellyfin -ErrorAction SilentlyContinue | Stop-Process -Force
+Start-ScheduledTask -TaskName "medialab-jellyfin-server"
 ```
 
-Verify: `Get-Service JellyfinServer` shows `Running`, and
-`curl http://127.0.0.1:8096/health` prints `Healthy`.
+Disable the tray's login autostart so two servers never fight over the port
+(this is the same flag Task Manager's "Disable" sets; the Run entry stays for
+manual use):
+
+```powershell
+New-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run" -Name JellyfinTray -PropertyType Binary -Value ([byte[]](3,0,0,0,0,0,0,0,0,0,0,0)) -Force
+```
+
+Verify (elevated, the task runs as SYSTEM): `Get-ScheduledTask medialab-jellyfin-server`
+is `Running`, and `curl http://127.0.0.1:8096/health` prints `Healthy`.
 
 ## 2. Automatic logon plus immediate lock
 
@@ -77,5 +85,5 @@ is `1`.
 
 Reboot and do not touch the keyboard. Within five minutes
 `bin/medialab-doctor.sh` is all `ok` (run it over SSH, or ask the bot
-`/storage` from Discord). A logoff is not a reboot: Jellyfin survives it,
+`/storage` from Discord). A logoff is not a reboot: Jellyfin (SYSTEM task) survives it,
 Docker and qBittorrent do not, by design.

@@ -72,13 +72,16 @@ needed here.
 - **qBittorrent:** unchanged. It already starts at login, which (a) turns into
   boot. It must keep running in the interactive session because its Web UI
   and search plugins live in the GUI process.
-- **Jellyfin:** register `jellyfin.exe --service` as a Windows service with
-  `sc.exe`, pointed at the data directory the tray-launched server already
-  uses (`C:\ProgramData\Jellyfin\Server`), so libraries and metadata are
-  untouched and no reinstall is needed. The service starts at boot regardless
-  of login and survives a logoff; the tray is removed from login startup so
-  two servers never fight over the port. This removes the one dependency the
-  pipeline has on a GUI process being alive on the host.
+- **Jellyfin:** run `jellyfin.exe --service` from a Task Scheduler task as
+  `SYSTEM` at startup with restart-on-failure, pointed at the data directory
+  the tray-launched server already uses (`C:\ProgramData\Jellyfin\Server`),
+  so libraries and metadata are untouched. Registering it as a real Windows
+  service with `sc.exe` was tried first and failed: `--service` runs headless
+  but never signals the Service Control Manager, so SCM kills it at 30 s
+  (event 7009) despite `Startup complete` in its own log; the official
+  installer wraps it in NSSM for that reason. The task is boot-scoped and
+  survives a logoff; the tray is disabled from login startup so two servers
+  never fight over the port.
 
 ### 3. Verification: a doctor script
 
@@ -109,8 +112,10 @@ automated by the workspace; each is a one-time host action.
 1. Autologon plus lock over a WSL2 engine. Rejected (b) for scope: it changes
    networking assumptions in every `.env` for a problem (a) already solves on
    this host.
-2. Jellyfin as a Windows service, not the tray. Rejected keeping the tray:
-   it ties the media server to a GUI session for no benefit.
+2. Jellyfin as a SYSTEM startup task, not the tray. Rejected keeping the
+   tray: it ties the media server to a GUI session for no benefit. Rejected an
+   `sc.exe` service: the binary lacks the SCM handshake. Rejected NSSM: an
+   extra download for what a scheduled task already provides.
 3. qBittorrent stays a login-session GUI app. Rejected a scheduled task in
    session 0: the Web UI and the search plugins need the GUI process.
 4. Doctor script is read-only. Rejected an auto-remediation script: starting
@@ -140,7 +145,7 @@ No service code changes, so no unit tests. Acceptance is a live check:
 ## Rollout
 
 1. Root PR: `bin/medialab-doctor.sh` + `docs/host-setup.md` + this spec.
-2. Host: Jellyfin service registration, Autologon, lock task. Each step has a
+2. Host: Jellyfin startup task, Autologon, lock task. Each step has a
    verification line in `docs/host-setup.md`.
 3. Reboot test per the test plan; record the result on the issue; spec to
    Shipped.
