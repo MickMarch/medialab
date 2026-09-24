@@ -1,6 +1,6 @@
 # Spec: full Jellyfin naming convention
 
-Status: Draft
+Status: Approved
 Issue: MickMarch/medialab#19
 
 ## Problem
@@ -121,9 +121,8 @@ Jellyfin should be told to scan.
 
 ## Open questions
 
-1. Delete the residual source folder when it has no video files, or leave
-   every folder for a human? The design says delete; say so if you would
-   rather keep them.
+None. Deleting an emptied source folder was accepted on 2026-09-24
+(decision 3).
 
 ## Test plan
 
