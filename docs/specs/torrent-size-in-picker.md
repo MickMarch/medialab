@@ -1,6 +1,6 @@
 # Spec: torrent download size in the picker
 
-Status: Approved
+Status: Shipped (2026-09-24)
 Issue: MickMarch/medialab#17
 
 ## Problem

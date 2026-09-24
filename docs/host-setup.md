@@ -107,7 +107,7 @@ A user task runs the doctor four minutes after logon and writes
 without anyone at the keyboard:
 
 ```powershell
-$bash    = "C:\Program Files\Gitinash.exe"
+$bash    = "C:\Program Files\Git\bin\bash.exe"
 $action  = New-ScheduledTaskAction -Execute $bash -Argument "-lc 'cd /c/Users/Shadow/projects/personal/medialab && { date; bin/medialab-doctor.sh; echo exit=`$?; } > .doctor-boot.log 2>&1'"
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"; $trigger.Delay = "PT4M"
 Register-ScheduledTask -TaskName "medialab-doctor-after-logon" -Action $action -Trigger $trigger -RunLevel Limited -Force

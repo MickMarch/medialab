@@ -1,6 +1,6 @@
 # Spec: /stop-seeding command
 
-Status: Approved
+Status: Shipped (2026-09-24)
 Issue: MickMarch/medialab#18
 
 ## Problem
