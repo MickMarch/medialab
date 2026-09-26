@@ -1,6 +1,6 @@
 # Spec: staging directory for downloads
 
-Status: Approved
+Status: Shipped
 Issue: MickMarch/medialab#59
 
 ## Problem
