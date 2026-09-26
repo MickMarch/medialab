@@ -24,6 +24,12 @@ services:
     image: medialab/torrent-downloader:${TORRENT_DOWNLOADER_VERSION:-dev}
     env_file:
       - ./torrent-downloader/.env
+    volumes:
+      # diskcache store: the hash -> {media_type, host_path, tmdb_id} entries
+      # the orchestrator reads at completion, plus TMDB/search caches. Without
+      # a volume every image rebuild wiped it and long downloads 404'd at
+      # RESOLVE_META. Path matches CACHE_DIRECTORY=.cache under WORKDIR /app.
+      - "downloader-cache:/app/.cache"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -97,3 +103,4 @@ networks:
 
 volumes:
   orchestrator-data:
+  downloader-cache:
