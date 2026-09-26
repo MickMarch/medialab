@@ -1,6 +1,6 @@
 # Spec: stuck and failed download remediation
 
-Status: Draft
+Status: Approved
 Issue: MickMarch/medialab#20
 
 ## Problem
@@ -136,13 +136,8 @@ human).
 
 ## Open questions
 
-1. `HEALTH_POLL_INTERVAL_SECONDS` default `300`. Five minutes is quick enough
-   for a media pipeline and negligible load. Say so if you want a different
-   default.
-2. The two 2026-08-13 jobs will be picked up by mode 4 on the first tick
-   after deploy and run through the pipeline, which will rename and move
-   those two movie folders into the new layout. That is the intended
-   behaviour; flagging it so it is not a surprise.
+None. Approved 2026-09-25 with the 300 s default and with the two
+2026-08-13 jobs being processed on the first tick.
 
 ## Test plan
 
