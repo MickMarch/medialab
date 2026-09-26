@@ -113,6 +113,20 @@ $trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAM
 Register-ScheduledTask -TaskName "medialab-doctor-after-logon" -Action $action -Trigger $trigger -RunLevel Limited -Force
 ```
 
+## Known host quirks
+
+- **Devices lose Jellyfin while the doctor is all green.** Phones and TVs reach
+  Jellyfin over NordVPN Meshnet (`100.x` addresses). After a reboot the
+  Meshnet peer link on the host can go stale while the `NordLynx` interface,
+  its `100.64.0.0/10` route and Jellyfin's own health all still look fine.
+  Seen 2026-09-24: no client had reached Jellyfin for a day; toggling Meshnet
+  off and on in the NordVPN app restored it at once. The doctor cannot detect
+  this because it only probes the host's own addresses. Check Jellyfin's
+  session list (`GET /Sessions`) for a recent `LastActivityDate` to tell
+  "server down" from "path down".
+- Do not run `nordvpn-service.exe --status`: it starts a second copy of the
+  service binary, which crashes and leaves an Application Error event behind.
+
 ## Acceptance
 
 Reboot and do not touch the keyboard. Within five minutes
