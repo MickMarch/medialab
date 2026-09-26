@@ -1,6 +1,6 @@
 # Spec: medialab-web, a browser UI beside the Discord bot
 
-Status: Draft
+Status: Approved
 Issue: MickMarch/medialab#66
 
 ## Problem
@@ -74,12 +74,15 @@ becomes a candidate for extraction into `medialab-contracts` or a
    poll cadence and is enough.
 5. Bot stays. Rejected: dropping it loses push notifications and mobile quick
    search that a page cannot provide without a PWA.
+6. Port 8080, direct. Rejected: a reverse proxy in front is host setup, not
+   this feature.
+7. The search page hides torrents the downloader's audio-language filter
+   rejects, same as the bot. Rejected: greyed-out rows invite the exact
+   wrong-language download the filter exists to stop.
 
 ## Open questions
 
-1. Port 8080 fine, or route through Jellyfin's reverse proxy later?
-2. Should the search page hide torrents that the audio-language filter would
-   reject (same as the bot), or show them greyed out?
+None.
 
 ## Test plan
 
