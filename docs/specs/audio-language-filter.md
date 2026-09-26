@@ -1,6 +1,6 @@
 # Spec: audio language in the torrent picker
 
-Status: Draft
+Status: Approved
 Issue: MickMarch/medialab#49
 
 ## Problem
