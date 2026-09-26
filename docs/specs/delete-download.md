@@ -1,6 +1,6 @@
 # Spec: /delete, undo a wrong download
 
-Status: Draft
+Status: Approved
 Issue: MickMarch/medialab#55
 
 ## Problem
@@ -108,7 +108,7 @@ No change. A deleted job is not "needing attention".
 
 ## Open questions
 
-1. Confirmation button timeout: 60 s proposed. Say if you want longer.
+None. Approved 2026-09-25 with the 60 s confirmation timeout.
 
 ## Test plan
 
