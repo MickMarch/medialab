@@ -147,6 +147,9 @@ netsh advfirewall firewall add rule name="medialab-web LAN" dir=in action=allow 
 Meshnet is the intended remote path; it needs no port forwarding and no
 public exposure. Never forward 8081 on the router.
 
+The gateway (8000) is published on loopback only; it is never reachable from
+another device. Only the web UI and Jellyfin are.
+
 ## Known host quirks
 
 - **Devices lose Jellyfin while the doctor is all green.** Phones and TVs reach

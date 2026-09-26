@@ -59,8 +59,10 @@ services:
     env_file:
       - ./medialab-orchestrator/.env
     ports:
-      # The only client-facing surface: the bot talks to the gateway.
-      - "8000:8000"
+      # Loopback only: the bot and the web UI reach the gateway over the compose
+      # network, the qBittorrent completion hook over localhost. Nothing on the
+      # LAN or Meshnet needs it; the web UI (8081) is the remote surface.
+      - "127.0.0.1:8000:8000"
     volumes:
       # Shared media volume: the orchestrator renames TV folders through this
       # mount (MEDIA_MOUNT_PATH=/media in its .env). qBittorrent on the host
