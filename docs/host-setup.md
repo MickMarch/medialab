@@ -93,14 +93,27 @@ with a settings-loading error.
 
 Verify: `(Get-Content "$env:APPDATA\Docker\settings-store.json" -Raw | ConvertFrom-Json).AutoStart` is `True`.
 
-## 4. Things already right, left alone
+## 4. Media layout: staging beside the libraries
+
+```
+F:\Media├── Movies\        Jellyfin library root
+├── Shows\         Jellyfin library root
+└── _incoming\     staging: qBittorrent saves here, the pipeline moves out
+    ├── Movies    └── Shows```
+
+Never add `_incoming` as a Jellyfin library: the whole point is that Jellyfin
+does not see a download until it is placed and named. The folders are created
+once (`mkdir F:\Media\_incoming\Movies F:\Media\_incoming\Shows`); the doctor
+warns when either is missing.
+
+## 5. Things already right, left alone
 
 - qBittorrent starts at logon from `HKCU\...\Run` and must stay a GUI process
   (its Web UI and search plugins live there).
 - The containers carry `restart: unless-stopped`; they return with the engine.
 - Power plan: sleep on AC is never, hibernate off, wake timers allowed.
 
-## 5. Post-logon self-check (optional)
+## 6. Post-logon self-check (optional)
 
 A user task runs the doctor four minutes after logon and writes
 `.doctor-boot.log` (gitignored) in the repo, so a reboot leaves evidence
