@@ -1,6 +1,6 @@
 # Spec: /delete, undo a wrong download
 
-Status: Approved
+Status: Shipped
 Issue: MickMarch/medialab#55
 
 ## Problem
