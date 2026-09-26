@@ -7,7 +7,7 @@
 # Host endpoints default to the published ports; override with env vars when
 # the host layout differs:
 #   QB_URL (default http://127.0.0.1:8080)   JELLYFIN_URL (default http://127.0.0.1:8096)
-#   GATEWAY_URL (default http://127.0.0.1:8000)
+#   GATEWAY_URL (default http://127.0.0.1:8000)   WEB_URL (default http://127.0.0.1:8081)
 set -uo pipefail
 
 # shellcheck source=lib.sh
@@ -16,6 +16,7 @@ set -uo pipefail
 QB_URL="${QB_URL:-http://127.0.0.1:8080}"
 JELLYFIN_URL="${JELLYFIN_URL:-http://127.0.0.1:8096}"
 GATEWAY_URL="${GATEWAY_URL:-http://127.0.0.1:8000}"
+WEB_URL="${WEB_URL:-http://127.0.0.1:8081}"
 BOT_SERVICE="medialab-bot"
 CURL_TIMEOUT_SECONDS=5
 # qBittorrent answers 403 to unauthenticated API calls; that still proves it is up.
@@ -119,7 +120,15 @@ else
   row ok "jobs need attention" "none"
 fi
 
-# 5. Bot logged in since its container last started
+# 5. Web UI answering
+body="$(http_body "${WEB_URL}/health")"
+if printf '%s' "${body}" | grep -q '"online"'; then
+  row ok "web ui" "${WEB_URL}/health -> ${body}"
+else
+  row FAIL "web ui" "${WEB_URL}/health -> ${body:-no response}"
+fi
+
+# 6. Bot logged in since its container last started
 cid="$(docker ps --filter "label=com.docker.compose.service=${BOT_SERVICE}" --format '{{.ID}}' 2>/dev/null | head -n1)"
 if [ -z "${cid}" ]; then
   row FAIL "bot logged in" "no running ${BOT_SERVICE} container"

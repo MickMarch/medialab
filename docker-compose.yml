@@ -97,6 +97,23 @@ services:
       - internal
     restart: unless-stopped
 
+  medialab-web:
+    build:
+      context: ./medialab-web
+      args:
+        APP_VERSION: ${MEDIALAB_WEB_VERSION:-dev}
+    image: medialab/medialab-web:${MEDIALAB_WEB_VERSION:-dev}
+    env_file:
+      - ./medialab-web/.env
+    ports:
+      # Browser UI; a second thin client of the gateway beside the bot.
+      - "8081:8080"
+    depends_on:
+      - medialab-orchestrator
+    networks:
+      - internal
+    restart: unless-stopped
+
 networks:
   internal:
     driver: bridge

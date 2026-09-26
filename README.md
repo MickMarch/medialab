@@ -19,7 +19,7 @@ which fronts every request and fans out to downstream workers.
 Discord user
     | slash command
 medialab-bot ----------------> medialab-orchestrator --+--> torrent-downloader -> qBittorrent + TMDB (host)
-   (one dependency)                    | (gateway)      |
+medialab-web (browser) ------>         | (gateway)      |
                                        |                +--> medialab-jellyfin   -> Jellyfin (host)
                                        |
 qBittorrent (host, run-on-completion script)
@@ -47,7 +47,8 @@ external workers) is the documented answer at 100x load, not the MVP.
 | Repo | Role | Client-facing | API |
 | --- | --- | --- | --- |
 | [medialab-bot](medialab-bot) | Discord slash-command UI | to users | [README](medialab-bot/README.md) |
-| [medialab-orchestrator](medialab-orchestrator) | Gateway + job state machine | to the bot | [README](medialab-orchestrator/README.md) |
+| [medialab-web](medialab-web) | Browser UI (jobs, delete, storage) | to users | [README](medialab-web/README.md) |
+| [medialab-orchestrator](medialab-orchestrator) | Gateway + job state machine | to the bot and the web UI | [README](medialab-orchestrator/README.md) |
 | [torrent-downloader](torrent-downloader) | qBittorrent + TMDB worker | no | [README](torrent-downloader/README.md) |
 | [medialab-jellyfin](medialab-jellyfin) | Jellyfin library worker | no | [README](medialab-jellyfin/README.md) |
 | [medialab-contracts](medialab-contracts) | Shared Pydantic models + constants | n/a | [README](medialab-contracts/README.md) |
@@ -77,7 +78,7 @@ image.
    comes from):
 
    ```bash
-   for s in torrent-downloader medialab-jellyfin medialab-orchestrator medialab-bot; do
+   for s in torrent-downloader medialab-jellyfin medialab-orchestrator medialab-bot medialab-web; do
      cp "$s/.env.example" "$s/.env"
    done
    ```

@@ -13,6 +13,7 @@ obtain them.
 | qBittorrent Web UI credential | qBittorrent -> Tools -> Options -> Web UI; enable and set the credential | `torrent-downloader/.env`, with `QB_HOST` pointing at the host from inside the container |
 | Jellyfin API key | Jellyfin dashboard -> Administration -> API Keys | `medialab-jellyfin/.env`, with `JELLYFIN_HOST` pointing at the host from inside the container |
 | Discord bot token + guild id | Discord developer portal -> your application -> Bot | `medialab-bot/.env` |
+| Web UI password + cookie secret | Choose any strong password; generate the secret (`python -c "import secrets; print(secrets.token_urlsafe(48))"`). Rotating the secret signs everyone out. | `medialab-web/.env` as `WEB_PASSWORD`, `WEB_SECRET_KEY` |
 | Jackett API key (optional) | Only if Jackett is installed; shown top-right of its web UI | `jackett.json` in qBittorrent's `nova3/engines` directory, not in any service `.env`. Not in use on this host. |
 
 ## Inter-service keys
@@ -23,6 +24,7 @@ strong random string). The caller and callee must hold the same value:
 | Caller variable | must equal | Callee variable |
 |---|---|---|
 | bot `ORCHESTRATOR_API_KEY` | = | orchestrator `API_KEY` |
+| web `ORCHESTRATOR_API_KEY` | = | orchestrator `API_KEY` |
 | completion relay `ORCHESTRATOR_API_KEY` (qBittorrent process env) | = | orchestrator `API_KEY` |
 | orchestrator `TORRENT_DOWNLOADER_API_KEY` | = | torrent-downloader `API_KEY` |
 | orchestrator `MEDIALAB_JELLYFIN_API_KEY` | = | medialab-jellyfin `API_KEY` |

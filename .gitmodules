@@ -13,3 +13,6 @@
 [submodule "medialab-orchestrator"]
 	path = medialab-orchestrator
 	url = https://github.com/MickMarch/medialab-orchestrator.git
+[submodule "medialab-web"]
+	path = medialab-web
+	url = https://github.com/MickMarch/medialab-web.git
