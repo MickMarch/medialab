@@ -14,3 +14,4 @@ explain to the next reader.
 | 0005 | [Register the Jellyfin library root once, not per download](0005-register-once.md) |
 | 0006 | [Work tracking lives in GitHub, docs hold one truth each](0006-one-source-of-truth.md) |
 | 0007 | [Boot-scoped, not login-scoped](0007-boot-scoped-not-login-scoped.md) |
+| 0008 | [A display name is not a path](0008-display-name-is-not-the-path.md) |
