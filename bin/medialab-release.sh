@@ -31,7 +31,10 @@ run() { if [ -n "${DRY}" ]; then echo "+ $*"; else "$@"; fi; }
 
 g() { git -C "${DIR}" "$@"; }
 
-# 1. preconditions
+# 1. preconditions (the root repo too: the pin bump must land on main, not on
+#    whatever branch happens to be checked out)
+root_branch="$(git -C "${REPO_ROOT}" rev-parse --abbrev-ref HEAD)"
+[ "${root_branch}" = "main" ] || { echo "root repo is on ${root_branch}, not main" >&2; exit 1; }
 branch="$(g rev-parse --abbrev-ref HEAD)"
 [ "${branch}" = "main" ] || { echo "${REPO} is on ${branch}, not main" >&2; exit 1; }
 [ -z "$(g status --porcelain)" ] || { echo "${REPO} has uncommitted changes" >&2; exit 1; }

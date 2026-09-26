@@ -1,6 +1,6 @@
 # Spec: audio language in the torrent picker
 
-Status: Approved
+Status: Shipped (2026-09-25)
 Issue: MickMarch/medialab#49
 
 ## Problem
