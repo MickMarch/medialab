@@ -59,6 +59,20 @@ else:
   esac
 done < <(medialab_services)
 
+# 2b. Staging folders: qBittorrent saves here, the pipeline moves into the
+# library. Missing folders are created by qBittorrent on first use, but a
+# warning beats a surprise; MEDIA_HOST_DIR comes from the root .env.
+media_host_dir="$(grep -E '^MEDIA_HOST_DIR=' "${REPO_ROOT}/.env" 2>/dev/null | cut -d= -f2- | tr -d '"')"
+if [ -n "${media_host_dir}" ]; then
+  for sub in Movies Shows; do
+    if [ -d "${media_host_dir}/_incoming/${sub}" ]; then
+      row ok "staging ${sub}" "${media_host_dir}/_incoming/${sub}"
+    else
+      row WARN "staging ${sub}" "${media_host_dir}/_incoming/${sub} missing"
+    fi
+  done
+fi
+
 # 3. Host apps
 code="$(http_code "${QB_URL}/api/v2/app/version")"
 case " ${QB_UP_STATUSES} " in

@@ -89,6 +89,10 @@ image.
    echo 'MEDIA_HOST_DIR=F:/Media' > .env
    ```
 
+   Downloads land in `MEDIA_HOST_DIR/_incoming/<Movies|Shows>` and the
+   orchestrator moves them into `<Movies|Shows>` once named, so Jellyfin never
+   sees a raw release (see [docs/host-setup.md](docs/host-setup.md)).
+
    The same directory appears under three names because three different
    processes see it: `MEDIA_HOST_DIR` is the host path compose mounts,
    `MEDIA_HOST_PATH` (downloader) is the host path handed to host-installed
