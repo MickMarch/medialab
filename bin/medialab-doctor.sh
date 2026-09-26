@@ -90,6 +90,21 @@ else
   row FAIL "gateway health" "${health:-no response}"
 fi
 
+# Jobs parked by the health poll. A warning, not a failure: the stack is up, a
+# job wants a human (see /jobs NEEDS_ATTENTION in Discord).
+needs_attention="$(printf '%s' "${health}" | python -c '
+import json, sys
+try:
+    print(int(json.load(sys.stdin).get("needs_attention", 0)))
+except Exception:
+    print(0)
+' 2>/dev/null)"
+if [ "${needs_attention:-0}" -gt 0 ]; then
+  row WARN "jobs need attention" "${needs_attention} job(s); run /jobs NEEDS_ATTENTION in Discord"
+else
+  row ok "jobs need attention" "none"
+fi
+
 # 5. Bot logged in since its container last started
 cid="$(docker ps --filter "label=com.docker.compose.service=${BOT_SERVICE}" --format '{{.ID}}' 2>/dev/null | head -n1)"
 if [ -z "${cid}" ]; then
