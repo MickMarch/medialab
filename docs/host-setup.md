@@ -126,6 +126,27 @@ $trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAM
 Register-ScheduledTask -TaskName "medialab-doctor-after-logon" -Action $action -Trigger $trigger -RunLevel Limited -Force
 ```
 
+## 7. Reaching the web UI from other devices
+
+`medialab-web` publishes port 8081 through Docker Desktop. Which networks can
+reach it is decided by Windows Firewall, per profile:
+
+| From | URL | Why it works or not |
+|---|---|---|
+| this PC | `http://localhost:8081` | loopback, no firewall |
+| NordVPN Meshnet (any device, anywhere) | `http://<host meshnet 100.x address>:8081` | the `NordLynx` interface is on the Public profile, where Docker Desktop's own inbound rule already allows it |
+| home LAN | `http://<host LAN address>:8081` | the Ethernet adapter is on the Private profile; Docker's rule does not cover it, so one rule is needed |
+
+LAN rule, once, from an elevated prompt (mirrors the `Jellyfin Meshnet` rule
+that exists for 8096):
+
+```powershell
+netsh advfirewall firewall add rule name="medialab-web LAN" dir=in action=allow protocol=TCP localport=8081 profile=private
+```
+
+Meshnet is the intended remote path; it needs no port forwarding and no
+public exposure. Never forward 8081 on the router.
+
 ## Known host quirks
 
 - **Devices lose Jellyfin while the doctor is all green.** Phones and TVs reach
