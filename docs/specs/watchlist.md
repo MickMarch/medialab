@@ -209,15 +209,17 @@ default 3). New orchestrator `.env` value `DISCORD_NOTIFY_WEBHOOK_URL`
     exists; the saved list plus discover covers it, and movie release timing
     on TMDB (theatrical vs digital) is unreliable for this.
 
+11. **`new_only` includes the follow day.** Rejected: strictly later air
+    dates; the user usually follows because of the episode airing today.
+12. **The bot has a one-tap "Follow, new episodes only" shortcut** beside the
+    full picker. Rejected: always the picker; the common case is one tap.
+13. **Pick falls back one resolution bucket lower, never `Other`.** Rejected:
+    exact only; having the episode beats waiting for a release that may not
+    come.
+
 ## Open questions
 
-1. Should `new_only` count the episode airing today, or only strictly later?
-   Proposed: on or after the follow date.
-2. Should a follow also apply when the show is added from the bot without a
-   start picker step (one tap "Follow, new episodes only")? Proposed: yes,
-   as a shortcut button beside the full picker.
-3. Downloader pick fallback: allow one bucket lower than requested, or exact
-   only? Proposed: one lower.
+None.
 
 ## Test plan
 
