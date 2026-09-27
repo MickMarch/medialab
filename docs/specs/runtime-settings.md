@@ -1,6 +1,6 @@
 # Spec: runtime settings, one store per service, one page to change them
 
-Status: Approved
+Status: Shipped
 Issue: MickMarch/medialab#21
 
 ## Problem
