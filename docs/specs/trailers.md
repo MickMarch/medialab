@@ -1,6 +1,6 @@
 # Spec: watch a trailer for a title or a season
 
-Status: Approved
+Status: Shipped
 Issue: MickMarch/medialab#96
 
 ## Problem
