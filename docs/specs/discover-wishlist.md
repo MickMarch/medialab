@@ -1,6 +1,6 @@
 # Spec: discover popular titles, filter by genre, keep a wishlist
 
-Status: Approved
+Status: Shipped
 Issue: MickMarch/medialab#81
 
 ## Problem
