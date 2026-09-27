@@ -1,6 +1,6 @@
 # Spec: browse a show's seasons and episodes, find torrents at every level
 
-Status: Approved
+Status: Shipped
 Issue: MickMarch/medialab#91
 
 ## Problem
