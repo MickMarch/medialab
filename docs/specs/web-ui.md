@@ -1,6 +1,6 @@
 # Spec: medialab-web, a browser UI beside the Discord bot
 
-Status: Approved
+Status: Shipped
 Issue: MickMarch/medialab#66
 
 ## Problem
