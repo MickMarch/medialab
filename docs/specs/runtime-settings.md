@@ -1,6 +1,6 @@
 # Spec: runtime settings, one store per service, one page to change them
 
-Status: Draft
+Status: Approved
 Issue: MickMarch/medialab#21
 
 ## Problem
@@ -116,13 +116,14 @@ service -> 404.
    interval each iteration instead of once at startup; `0` still disables
    the next tick. Rejected: leaving it restart-only means one row on the page
    works differently from every other.
-6. Not in scope: the storage threshold (#22) adds one orchestrator setting on
+6. Web first, the bot's `/settings` cog in a follow-up PR. Rejected: one
+   release across five repos is harder to verify than two.
+7. Not in scope: the storage threshold (#22) adds one orchestrator setting on
    top of this; the RSS watchlist (#24) keeps its own table, not settings.
 
 ## Open questions
 
-1. Should the bot get `/settings` in the same release, or web first and bot
-   in a follow-up? Recommendation: web first; the bot follows in its own PR.
+None.
 
 ## Test plan
 
