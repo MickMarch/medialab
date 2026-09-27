@@ -102,6 +102,14 @@ chosen at release time by the bump kind (`Added`/`Changed` -> minor,
 `Fixed` -> patch, breaking -> major). See
 `docs/decisions/0004-no-version-prediction.md` for why.
 
+## UI scope
+
+The Discord bot is for remote downloading away from home: search, pick,
+download, list, delete, and one-tap shortcuts. Any multi-step or stateful
+flow (browsing seasons and episodes, follow pickers, redo, pause and resume,
+per-episode controls) is web-only. A spec that puts such a flow in the bot
+must say why.
+
 ## Environment
 
 Host: Windows 10 gaming PC; avoid CPU/GPU-heavy local services. qBittorrent
