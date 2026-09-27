@@ -1,6 +1,6 @@
 # Spec: live download progress, ETA and speed on active jobs
 
-Status: Approved
+Status: Shipped
 Issue: MickMarch/medialab#86
 
 ## Problem
