@@ -1,6 +1,6 @@
 # Spec: live download progress, ETA and speed on active jobs
 
-Status: Draft
+Status: Approved
 Issue: MickMarch/medialab#86
 
 ## Problem
@@ -102,12 +102,13 @@ consumer.
 5. **Unknown ETA is `None`, not the sentinel.** Rejected: passing `8640000`
    through and letting each UI special-case it.
 
+6. **The web short refresh interval is 5 seconds, a named constant.**
+   Rejected: a runtime setting; nothing yet needs to tune it without a
+   redeploy.
+
 ## Open questions
 
-1. Short refresh interval for the web jobs table while downloading.
-   Proposed: 5 seconds.
-2. Should the web short interval be a runtime setting? Proposed: no, a
-   constant; revisit if it matters.
+None.
 
 ## Test plan
 
