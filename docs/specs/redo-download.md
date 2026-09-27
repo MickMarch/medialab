@@ -1,6 +1,6 @@
 # Spec: redo a bad download, search again and replace the original
 
-Status: Draft
+Status: Approved
 Issue: MickMarch/medialab#92
 
 ## Problem

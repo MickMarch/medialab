@@ -1,6 +1,6 @@
 # Spec: watchlist, saved titles and followed shows that auto-download new episodes
 
-Status: Draft
+Status: Approved
 Issue: MickMarch/medialab#24
 
 ## Problem

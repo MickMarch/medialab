@@ -1,6 +1,6 @@
 # Spec: browse a show's seasons and episodes, find torrents at every level
 
-Status: Draft
+Status: Approved
 Issue: MickMarch/medialab#91
 
 ## Problem
@@ -122,11 +122,13 @@ Unchanged.
 5. **`append_to_response` for up to 20 seasons, per-season calls beyond.**
    Rejected: always per season; the common case is one round trip.
 
+6. **A Browse button on show cards, not the poster click.** Rejected:
+   making the show page the poster target; Download and Save stay one click
+   away on the card. Revisit once the watchlist ships.
+
 ## Open questions
 
-1. Should the show page be the click target of a show poster everywhere,
-   with Download and Save moved into it, or a separate Browse button?
-   Proposed: Browse button now; revisit once the watchlist ships.
+None.
 
 ## Test plan
 
