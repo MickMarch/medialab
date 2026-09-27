@@ -13,6 +13,7 @@ obtain them.
 | qBittorrent Web UI credential | qBittorrent -> Tools -> Options -> Web UI; enable and set the credential | `torrent-downloader/.env`, with `QB_HOST` pointing at the host from inside the container |
 | Jellyfin API key | Jellyfin dashboard -> Administration -> API Keys | `medialab-jellyfin/.env`, with `JELLYFIN_HOST` pointing at the host from inside the container |
 | Discord bot token + guild id | Discord developer portal -> your application -> Bot | `medialab-bot/.env` |
+| Discord notify webhook URL (optional) | Discord -> the target channel -> Edit Channel -> Integrations -> Webhooks -> New Webhook -> Copy Webhook URL. Anyone holding the URL can post to that channel, so treat it as a secret. | `medialab-orchestrator/.env` as `DISCORD_NOTIFY_WEBHOOK_URL`; unset means no follow notices |
 | Web UI password + cookie secret | Choose any strong password; generate the secret (`python -c "import secrets; print(secrets.token_urlsafe(48))"`). Rotating the secret signs everyone out. | `medialab-web/.env` as `WEB_PASSWORD`, `WEB_SECRET_KEY` |
 | Jackett API key (optional) | Only if Jackett is installed; shown top-right of its web UI | `jackett.json` in qBittorrent's `nova3/engines` directory, not in any service `.env`. Not in use on this host. |
 
