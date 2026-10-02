@@ -1,6 +1,6 @@
 # Spec: season packs for the complete seasons of a followed show
 
-Status: Approved
+Status: Shipped
 Issue: MickMarch/medialab#104
 
 ## Problem
@@ -51,9 +51,11 @@ is renamed and placed.
 
 ### Vocabulary
 
-- **Complete season**: every episode TMDB lists for the season has an air
-  date at least `follow_delay_hours` ago. Specials (season 0) are never
-  considered.
+- **Complete season**: TMDB's next episode to air is not in the season,
+  the listing holds as many episodes as TMDB counts for the season, and
+  every one has an air date at least `follow_delay_hours` ago. The two
+  TMDB checks keep a half-listed airing season from reading as complete.
+  Specials (season 0) are never considered.
 - **Pack-eligible season**: a complete season at or after the follow's
   start point in which no episode is in the library, queued, or recorded
   in `follow_submission`. A season with any of those falls back to
