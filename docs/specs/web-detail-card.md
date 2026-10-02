@@ -1,6 +1,6 @@
 # Spec: one title card on Search and Discover, with the download flow inside it
 
-Status: Approved
+Status: Shipped
 Issue: MickMarch/medialab#101, MickMarch/medialab#103
 
 ## Problem
@@ -78,9 +78,9 @@ No contract, orchestrator or downloader change.
   sections that still host the flow (show page, Jobs redo, watchlist follow)
   add the `download-slot` class to their `#stage` section, so the same two
   partials serve both placements with no template branching.
-- `partials/download_started.html` renders into the slot in place of the
-  table, with a "Find another" link that reloads the scope or torrent step,
-  and the existing out-of-band jobs refresh is unchanged.
+- `partials/download_started.html` renders into a notice element above the
+  table inside the slot, so the table stays and a second pick (the next
+  episode) is one tap away.
 - The torrent table inside a card uses the existing narrow layout (the
   `max-width: 700px` rules that stack `table.torrents` rows) at every width
   when it is inside `.detail`, because a card is never wide enough for six
