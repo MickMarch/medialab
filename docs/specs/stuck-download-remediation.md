@@ -1,6 +1,6 @@
 # Spec: stuck and failed download remediation
 
-Status: Approved
+Status: Shipped
 Issue: MickMarch/medialab#20
 
 ## Problem
