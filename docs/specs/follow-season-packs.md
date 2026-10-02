@@ -1,6 +1,6 @@
 # Spec: season packs for the complete seasons of a followed show
 
-Status: Draft
+Status: Approved
 Issue: MickMarch/medialab#104
 
 ## Problem
@@ -191,11 +191,13 @@ web Watchlist.
 8. **Web only for the decision; Discord gets the notice.** The UI scope
    rule; the choice is per season and stateful.
 
+9. **No automatic retry of a missing pack.** Rejected: trying the standard
+   profile again every few days in case the pack appears. The user decides
+   once per season, and Check now re-runs the chosen attempt at will.
+
 ## Open questions
 
-1. Should a `pack_not_found` season be retried automatically with the
-   standard profile after some days, in case the pack appears later?
-   Proposed: no; the user decides, and Check now exists.
+None.
 
 ## Test plan
 
