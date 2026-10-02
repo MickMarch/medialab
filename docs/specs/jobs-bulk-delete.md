@@ -1,6 +1,6 @@
 # Spec: delete several jobs at once from the Jobs page
 
-Status: Approved
+Status: Shipped
 Issue: MickMarch/medialab#105
 
 ## Problem
