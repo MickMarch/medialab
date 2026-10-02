@@ -1,0 +1,8 @@
+# WireGuard config and any other lab secret. Never committed.
+secrets/*
+!secrets/.gitkeep
+# Lab runtime state: qBittorrent appdata, downloaded media, lab env.
+qbittorrent-config/
+media/*
+!media/.gitkeep
+.env

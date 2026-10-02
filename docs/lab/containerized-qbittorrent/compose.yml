@@ -1,0 +1,82 @@
+# Standalone practice lab for MickMarch/medialab#28: qBittorrent behind a
+# gluetun WireGuard kill-switch. Nothing here touches the medialab stack.
+#
+# Roles:
+#   gluetun     VPN client + firewall. Owns the network namespace.
+#   qbittorrent Shares gluetun's namespace. No independent route to the internet.
+#   probe       Stands in for torrent-downloader: calls the qBittorrent API over
+#               the compose network.
+#   webhook     Stands in for the orchestrator: logs whatever the completion
+#               hook posts to it.
+#
+# Bring-your-own VPN: provider settings live in secrets/vpn.env (gitignored),
+# nothing else changes when the provider changes. Templates in vpn.env.example.
+# A provider that hands out WireGuard .conf files can instead be mounted with
+# the compose.wgfile.yml overlay.
+
+name: medialab-lab-qbt
+
+services:
+  gluetun:
+    image: ${GLUETUN_IMAGE}
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    env_file:
+      - ./secrets/vpn.env
+    environment:
+      # Allow qBittorrent to reach other lab containers (the webhook receiver)
+      # through the firewall. Everything else leaves only via the tunnel.
+      FIREWALL_OUTBOUND_SUBNETS: ${LAB_SUBNET}
+      # Control server for the kill-switch test (PUT /v1/vpn/status).
+      HTTP_CONTROL_SERVER_AUTH_DEFAULT_ROLE: '{"auth":"apikey","apikey":"${GLUETUN_CONTROL_API_KEY}"}'
+      TZ: America/Toronto
+    ports:
+      # qBittorrent WebUI, reachable from the host for first-boot setup.
+      - "127.0.0.1:8090:8080"
+      # gluetun control server, loopback only.
+      - "127.0.0.1:8099:8000"
+    networks:
+      - lab
+    restart: unless-stopped
+
+  qbittorrent:
+    image: ${QBITTORRENT_IMAGE}
+    network_mode: "service:gluetun"
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: America/Toronto
+      WEBUI_PORT: "8080"
+    volumes:
+      - ./qbittorrent-config:/config
+      - ./media:/media
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    restart: unless-stopped
+
+  probe:
+    image: curlimages/curl:latest
+    command: ["sleep", "infinity"]
+    environment:
+      QB_API_KEY: ${QB_API_KEY}
+    networks:
+      - lab
+
+  webhook:
+    image: mendhak/http-https-echo:latest
+    environment:
+      HTTP_PORT: "8000"
+    networks:
+      lab:
+        # Fixed address so the hook can be tested by IP as well as by name.
+        ipv4_address: 172.30.77.10
+
+networks:
+  lab:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${LAB_SUBNET}
