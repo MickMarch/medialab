@@ -1,6 +1,6 @@
 # Spec: one title card on Search and Discover, with the download flow inside it
 
-Status: Draft
+Status: Approved
 Issue: MickMarch/medialab#101, MickMarch/medialab#103
 
 ## Problem
@@ -127,12 +127,13 @@ Unchanged.
    flows about a single already-chosen title, and widening the change
    risks the redo out-of-band swap for no stated pain.
 6. **Web only.** The bot has no cards.
+7. **"More" on Discover leaves an open card alone.** New posters land after
+   it. Rejected: closing the card first; the user may be reading it while
+   loading more, and the card is one tap to close.
 
 ## Open questions
 
-1. When a detail card is open and the user presses "More" on Discover, the
-   appended posters land after the open card. Acceptable, or should "More"
-   close the open card first?
+None.
 
 ## Test plan
 
