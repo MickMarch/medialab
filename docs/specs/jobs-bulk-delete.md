@@ -1,6 +1,6 @@
 # Spec: delete several jobs at once from the Jobs page
 
-Status: Draft
+Status: Approved
 Issue: MickMarch/medialab#105
 
 ## Problem
@@ -140,11 +140,14 @@ Unchanged. `/delete` remains the one-at-a-time remote path.
 8. **Web only.** Multi-select is stateful and multi-step; the UI scope rule
    puts it in the browser.
 
+9. **Changing the status filter leaves select mode.** The table
+   re-renders and the selection is cleared. Rejected: carrying the mode
+   across; the filter form is outside the table and the user has already
+   left the selection behind.
+
 ## Open questions
 
-1. Should the Select toggle remember itself across the status filter
-   change? Proposed: no; changing the filter re-renders the table and
-   leaves select mode.
+None.
 
 ## Test plan
 
