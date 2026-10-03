@@ -14,7 +14,14 @@ medialab stack, the host qBittorrent, or `F:\Media`.
 | 3 | Can the completion hook reach another compose service by IP? By name? Are curl and Python present for it? | `scripts/03-hook-egress.sh` |
 | 4 | Which `qBittorrent.conf` keys must the real compose pre-seed (API key, interface binding, autorun, paths, plugins)? | `scripts/04-provisioning.sh` |
 
+| 5 | Does the real torrent-downloader work inside gluetun's namespace (health, DNS, TMDB, plugin search, download)? | `compose.downloader.yml` overlay, driven by hand from the probe |
+
 Record outcomes in [FINDINGS.md](FINDINGS.md).
+
+The downloader overlay needs `secrets/downloader.env` (gitignored): the
+downloader's `.env` keys with `QB_HOST=127.0.0.1`, `API_PORT=8001`,
+`MEDIA_HOST_PATH=/media`, `VPN_INTERFACES=tun0`, the lab qBittorrent API key
+and your TMDB key.
 
 ## Setup
 

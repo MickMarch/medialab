@@ -1,6 +1,6 @@
 # Findings
 
-Status: Complete (run 2026-10-02, NordVPN via gluetun, Docker Desktop on Windows 10)
+Status: Complete (runs 2026-10-02 and 2026-10-03, NordVPN via gluetun, Docker Desktop on Windows 10)
 
 Outcomes of the lab, feeding the spec revision for
 [MickMarch/medialab#28](https://github.com/MickMarch/medialab/issues/28).
@@ -15,6 +15,23 @@ Outcomes of the lab, feeding the spec revision for
 | 4 | Provisioning without clicks | PASS | Every needed setting is reachable through the API with a cookie session: interface (`current_network_interface`), autorun, save path, queueing, upload limit, admin password (`web_ui_password`), plugin install (`search/installPlugin`). API key is created by `POST app/rotateAPIKey`, which returns it, and is stored in plain text as `WebUI\APIKey` in `qBittorrent.conf`. Everything survived a container restart. | Two viable provisioning paths; see below. |
 | 5 | gluetun restart and recreate | PASS with rule | `restart gluetun` kept qBittorrent attached. `up -d --force-recreate gluetun` left qBittorrent on a dead namespace; a plain `docker compose up -d` recreated it and everything came back. Startup to healthy took 30 to 60 s because Nord's first server often failed the health check and gluetun rotated. | Compose must keep `depends_on: gluetun: condition: service_healthy`. Provider switch procedure is "edit vpn.env, `docker compose up -d`", never a gluetun-only recreate. Health poll must tolerate a one-minute window. |
 | 6 | End-to-end download | PASS | Creative Commons short film (129 MB) added through the API from the probe with `savepath=/media/_incoming/Movies`, finished in about 25 s at 5.6 MB/s through the tunnel while the host was itself on a VPN. Deleted with files through the API. | Tunnel inside a host tunnel works at full speed; no MTU tuning needed. Issue #30 becomes moot for torrent traffic. |
+
+## Second run: torrent-downloader inside the namespace (2026-10-03)
+
+`compose.downloader.yml` adds the real `medialab/torrent-downloader` image
+with `network_mode: service:gluetun`, `QB_HOST=127.0.0.1`, `API_PORT=8001`
+(8000 is gluetun's control server in the same namespace) and
+`VPN_INTERFACES=tun0`.
+
+| # | Question | Result | Evidence | Consequence for the spec |
+|---|---|---|---|---|
+| 7 | Downloader API reachable from a sibling, VPN flag | PASS | `GET /api/v1/health` at `gluetun:8001` returned `vpn_interface_bound: true` with no config beyond `tun0`. | Orchestrator addresses the downloader as `gluetun:<port>`; health flag works unchanged. |
+| 8 | Downloader DNS and egress | PASS | `/etc/resolv.conf` is `nameserver 127.0.0.1` (gluetun's DNS-over-TLS forwarder); egress IP is the tunnel's. Host resolver is out of the path. | The DNS flakiness seen on the stable stack on 2026-10-03 cannot reach a downloader that lives here. |
+| 9 | TMDB and plugin search through the tunnel | PASS | TMDB search and detail calls succeeded over the tunnel; plugin search ran against qBittorrent on `127.0.0.1:8080`. | TMDB works from a VPN exit IP; no proxy or key change needed. |
+| 10 | `POST /download` end to end | FAIL, expected | Add accepted, but the save path was `/media\_incoming\Movies`: the downloader joins with backslashes for host qBittorrent on Windows. qBittorrent on Linux treated it as one filename at `/`, could not create it, torrent went to `error`. | Confirms the `MEDIA_HOST_PATH` to `MEDIA_MOUNT_PATH` change is a prerequisite, and the join must use `/`. Nothing else in the downloader needs to change for this layout. |
+
+Compose recreated gluetun for the new port mapping and recreated qBittorrent
+with it on its own, so a port change is safe through a plain `up -d`.
 
 ## Provisioning options
 

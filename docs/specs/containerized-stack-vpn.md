@@ -29,9 +29,10 @@ without the same provider cannot follow the setup at all.
 
 ## Goal and non-goals
 
-**Goal.** qBittorrent runs as a container whose only network path is a
-gluetun WireGuard tunnel, so a dropped tunnel means no route rather than a
-refused request. The VPN is bring-your-own: one provider env file, swappable
+**Goal.** qBittorrent and torrent-downloader run as containers whose only
+network path is a gluetun WireGuard tunnel, so a dropped tunnel means no
+route rather than a refused request, and no torrent-related lookup or fetch
+ever leaves from the host's address or through the host's resolver. The VPN is bring-your-own: one provider env file, swappable
 without touching anything else. First boot needs no clicking in the
 qBittorrent UI. Paths, the completion hook and the VPN check become
 provider-agnostic constants.
@@ -72,8 +73,9 @@ STOP_SEEDING step and not part of this change.
 |---|---|---|
 | `gluetun` | `qmcgaw/gluetun` (pinned major) | `cap_add: NET_ADMIN`, `/dev/net/tun`, `env_file: ./gluetun/vpn.env`, `FIREWALL_OUTBOUND_SUBNETS` set to the compose subnet (fixed via `ipam`), control server with API-key auth on loopback only, healthcheck built in. |
 | `qbittorrent` | `lscr.io/linuxserver/qbittorrent` (pinned, >= 5.2) | `network_mode: service:gluetun`, `depends_on: gluetun: condition: service_healthy`, volumes `qbittorrent-config:/config` and `${MEDIA_HOST_DIR}:/media`. No ports of its own; the WebUI is published on `gluetun` to `127.0.0.1` for the operator. |
+| `torrent-downloader` (moved) | existing image | Also `network_mode: service:gluetun`. Talks to qBittorrent on `127.0.0.1:8080`, listens on `API_PORT=8001` (8000 is gluetun's control server in the shared namespace), and is addressed by the orchestrator as `http://gluetun:8001`. Its DNS is gluetun's DNS-over-TLS forwarder and its egress (TMDB, details-page scraping, plugin fetches) is the tunnel. Verified in the lab's second run. |
 
-Both are third-party images with no `build:` key. `bin/lib.sh` gains a
+gluetun and qBittorrent are third-party images with no `build:` key. `bin/lib.sh` gains a
 filter so version and build scripts iterate only built services; a
 `medialab_third_party_services` helper lists the rest for `medialab-status`.
 
@@ -94,9 +96,12 @@ recreate orphans qBittorrent; a plain `up -d` recreates both correctly.
 `/media` is one bind mount seen identically by qBittorrent and the
 orchestrator. torrent-downloader's `MEDIA_HOST_PATH` (a Windows path handed
 to host qBittorrent) becomes `MEDIA_MOUNT_PATH=/media`, the same name and
-meaning as the orchestrator's. Save path per add stays
+meaning as the orchestrator's. Save path per add becomes
 `<MEDIA_MOUNT_PATH>/<STAGING_SUBDIR>/<MEDIA_TYPE_SUBDIRS[media_type]>`, built
-from `medialab-contracts` constants. The hook's `content_path` is already a
+from `medialab-contracts` constants and joined with `/`. The current builder
+joins with backslashes for host qBittorrent on Windows; verified in the lab
+that Linux qBittorrent then treats `/media\_incoming\Movies` as one filename
+at `/` and the torrent errors. This change is a prerequisite for the move. The hook's `content_path` is already a
 container path on the same mount, so no translation remains anywhere.
 `docs/decisions/0001` gets a follow-up note.
 
@@ -149,8 +154,8 @@ restart; plugin install lands in `/config/qBittorrent/nova3/engines`.
 
 | Repo | Change |
 |---|---|
-| torrent-downloader | `MEDIA_HOST_PATH` becomes `MEDIA_MOUNT_PATH` (container path); `QB_HOST` example `gluetun`; `VPN_INTERFACES` default `tun0`; `.env.example` and README rewritten for the container layout. |
-| medialab-orchestrator | Aggregated `/health` carries `vpn_interface_bound`; webhook README documents the curl autorun; `notify_complete.py` marked deprecated. |
+| torrent-downloader | `MEDIA_HOST_PATH` becomes `MEDIA_MOUNT_PATH` (container path, `/` join); `QB_HOST` example `127.0.0.1`; `API_PORT` example `8001`; `VPN_INTERFACES` default `tun0`; `.env.example` and README rewritten for the shared-namespace layout. |
+| medialab-orchestrator | `TORRENT_DOWNLOADER_URL` example becomes `http://gluetun:8001`; aggregated `/health` carries `vpn_interface_bound`; webhook README documents the curl autorun; `notify_complete.py` marked deprecated. |
 | medialab-web, medialab-bot | Show VPN status from aggregated health (web: status card; bot: startup health line). |
 | workspace | compose: `gluetun` and `qbittorrent` services, fixed subnet, `gluetun/vpn.env.example`, `compose.wgfile.yml` overlay; `bin/lib.sh` built-vs-third-party split; `bin/medialab-qbt-provision.sh`; README and `docs/host-setup.md` updated; `docs/secrets.md` gains the VPN key, qBittorrent API key and gluetun control key rows. |
 | medialab-contracts | None. |
@@ -198,6 +203,18 @@ restart; plugin install lands in `/config/qBittorrent/nova3/engines`.
 10. **Paths unify on `/media` across qBittorrent and the orchestrator.**
     Rejected: keeping a host-path env in the downloader for compatibility.
     It was the source of the three-names-for-one-directory confusion.
+11. **torrent-downloader joins gluetun's namespace.** Rejected: leaving it
+    on the compose network with host-forwarded DNS. On 2026-10-03 a download
+    failed on the stable stack because the container's resolver, which
+    follows the host's VPN-driven DNS, could not resolve a details page for
+    about four minutes after startup; pinning public resolvers was tried
+    earlier and broke under a host VPN that blocks plain UDP/53. Inside the
+    namespace the downloader resolves through gluetun's DNS-over-TLS
+    forwarder and scrapes torrent-site pages through the tunnel instead of
+    from the home IP. Verified: health, TMDB, plugin search and qBittorrent
+    on `127.0.0.1` all work there; only the save-path join (decision 10)
+    stood in the way. Cost: the downloader's port must avoid gluetun's 8000
+    and the orchestrator addresses it through `gluetun`.
 
 ## Open questions
 
@@ -231,8 +248,10 @@ restart; plugin install lands in `/config/qBittorrent/nova3/engines`.
 
 1. workspace: `bin/lib.sh` split and tests (no behaviour change for the
    current stack).
-2. torrent-downloader: `MEDIA_MOUNT_PATH`, `tun0` default, docs. Release.
-3. medialab-orchestrator: health flag, deprecation note. Release.
+2. torrent-downloader: `MEDIA_MOUNT_PATH` with `/` join, `tun0` default,
+   `API_PORT` and `QB_HOST` examples, docs. Release.
+3. medialab-orchestrator: health flag, downloader URL example, deprecation
+   note. Release.
 4. medialab-web, medialab-bot: show the flag. Release.
 5. workspace: compose services, provision script, docs, `docs/secrets.md`.
    Manual host steps: stop host qBittorrent, run the provision script, run
