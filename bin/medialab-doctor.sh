@@ -1,19 +1,23 @@
 #!/usr/bin/env bash
 # Is the stack up? One read-only table covering every layer:
-#   Docker engine, each compose service, the two host apps, the gateway's
-#   aggregated health, and whether the bot is logged in. Exits non-zero if any
-#   row fails. Starts nothing; that is what autostart is for.
+#   Docker engine, each compose service (built and third-party), host Jellyfin,
+#   the containerized qBittorrent WebUI, the gateway's aggregated health
+#   including the VPN binding, and whether the bot is logged in. Exits non-zero
+#   if any row fails. Starts nothing; that is what autostart is for.
 #
-# Host endpoints default to the published ports; override with env vars when
-# the host layout differs:
-#   QB_URL (default http://127.0.0.1:8080)   JELLYFIN_URL (default http://127.0.0.1:8096)
+# Endpoints default to the published ports; override with env vars when the
+# layout differs:
+#   QB_URL (default http://127.0.0.1:<QBT_WEBUI_PORT from .env, else 8090>)
+#   JELLYFIN_URL (default http://127.0.0.1:8096)
 #   GATEWAY_URL (default http://127.0.0.1:8000)   WEB_URL (default http://127.0.0.1:8081)
 set -uo pipefail
 
 # shellcheck source=lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-QB_URL="${QB_URL:-http://127.0.0.1:8080}"
+QBT_WEBUI_PORT_DEFAULT=8090
+qbt_webui_port="$(grep -E '^QBT_WEBUI_PORT=' "${REPO_ROOT}/.env" 2>/dev/null | cut -d= -f2- | tr -d '"\r')"
+QB_URL="${QB_URL:-http://127.0.0.1:${qbt_webui_port:-${QBT_WEBUI_PORT_DEFAULT}}}"
 JELLYFIN_URL="${JELLYFIN_URL:-http://127.0.0.1:8096}"
 GATEWAY_URL="${GATEWAY_URL:-http://127.0.0.1:8000}"
 WEB_URL="${WEB_URL:-http://127.0.0.1:8081}"
@@ -58,7 +62,7 @@ else:
     running*) row ok "container ${svc}" "${state}" ;;
     *)        row FAIL "container ${svc}" "${state}" ;;
   esac
-done < <(medialab_services)
+done < <(medialab_services; medialab_third_party_services)
 
 # 2b. Staging folders: qBittorrent saves here, the pipeline moves into the
 # library. Missing folders are created by qBittorrent on first use, but a
@@ -74,7 +78,7 @@ if [ -n "${media_host_dir}" ]; then
   done
 fi
 
-# 3. Host apps
+# 3. qBittorrent WebUI (published on gluetun) and host Jellyfin
 code="$(http_code "${QB_URL}/api/v2/app/version")"
 case " ${QB_UP_STATUSES} " in
   *" ${code} "*) row ok "qBittorrent web ui" "${QB_URL} -> ${code}" ;;
@@ -88,7 +92,7 @@ else
   row FAIL "jellyfin" "${JELLYFIN_URL}/health -> ${body:-no response}"
 fi
 
-# 4. Gateway health, both downstream workers true
+# 4. Gateway health, both downstream workers true, VPN bound
 health="$(http_body "${GATEWAY_URL}/api/v1/health")"
 gateway_ok="$(printf '%s' "${health}" | python -c '
 import json, sys
@@ -103,6 +107,21 @@ if [ "${gateway_ok}" = "yes" ]; then
   row ok "gateway health" "${health}"
 else
   row FAIL "gateway health" "${health:-no response}"
+fi
+
+# The downloader refuses every download while this is false; the stack is up
+# but useless for its purpose, so it is a failure, not a warning.
+vpn_bound="$(printf '%s' "${health}" | python -c '
+import json, sys
+try:
+    print("yes" if json.load(sys.stdin).get("vpn_interface_bound") else "no")
+except Exception:
+    print("no")
+' 2>/dev/null)"
+if [ "${vpn_bound}" = "yes" ]; then
+  row ok "vpn bound" "qBittorrent bound to an accepted VPN interface"
+else
+  row FAIL "vpn bound" "downloader reports VPN not bound; downloads are refused"
 fi
 
 # Jobs parked by the health poll. A warning, not a failure: the stack is up, a

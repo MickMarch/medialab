@@ -17,15 +17,14 @@ which fronts every request and fans out to downstream workers.
 
 ```
 Discord user
-    | slash command
-medialab-bot ----------------> medialab-orchestrator --+--> torrent-downloader -> qBittorrent + TMDB (host)
-medialab-web (browser) ------>         | (gateway)      |
-                                       |                +--> medialab-jellyfin   -> Jellyfin (host)
-                                       |
-qBittorrent (host, run-on-completion script)
-    | webhook (torrent finished)      v
-notify_complete.py --------> medialab-orchestrator (advances the job:
-                              stop-seed -> resolve TMDB -> rename -> Jellyfin scan)
+    | slash command                                   gluetun VPN namespace (tun0 only)
+medialab-bot ----------------> medialab-orchestrator --+--> | torrent-downloader -> qBittorrent | -> TMDB, trackers
+medialab-web (browser) ------>         | (gateway)      |    |        (127.0.0.1)   curl hook  |    through the tunnel
+                                       |                |    +-------------------------|-------+
+                                       |                +--> medialab-jellyfin -> Jellyfin (host)
+                                       |                                          |
+                                       +<--- webhook (torrent finished) ----------+
+                                       (advances the job: stop-seed -> resolve TMDB -> rename -> Jellyfin scan)
 ```
 
 - **Service per capability.** Each service wraps one external system
@@ -36,6 +35,9 @@ notify_complete.py --------> medialab-orchestrator (advances the job:
   job state machine in SQLite. No event bus.
 - **One event edge.** The qBittorrent completion webhook is the only
   event-triggered ingress; everything else is request/response.
+- **The network is the kill-switch.** qBittorrent and torrent-downloader share
+  gluetun's network namespace; with the tunnel down they have no route, not a
+  refused request. The downloader's own VPN check stays as the message.
 - **Forward-retry saga.** Idempotent steps, retried forward on failure, no
   compensation.
 
@@ -60,9 +62,12 @@ config.
 
 ## Running with Docker Compose
 
-Services run as containers on one shared network and reach the host-installed
-apps (qBittorrent, Jellyfin) over `host.docker.internal`. Only the orchestrator
-publishes a port.
+Everything except Jellyfin runs as a container. gluetun holds the VPN tunnel;
+qBittorrent and torrent-downloader live inside its network namespace, so
+torrent traffic, tracker lookups and TMDB calls all leave through the tunnel
+and none of them can leave without it. Jellyfin stays a host app reached over
+`host.docker.internal`. Published ports: the orchestrator and the qBittorrent
+WebUI on loopback, the web UI on 8081.
 
 `.env` files are a runtime input, not a build input; no secret is baked into an
 image.
@@ -81,26 +86,33 @@ image.
    for s in torrent-downloader medialab-jellyfin medialab-orchestrator medialab-bot medialab-web; do
      cp "$s/.env.example" "$s/.env"
    done
+   cp .env.example .env
+   cp gluetun/vpn.env.example gluetun/vpn.env
    ```
 
-   Compose itself interpolates one value: the host media root bind-mounted into
-   the orchestrator. Put it in a root `.env`:
-
-   ```bash
-   echo 'MEDIA_HOST_DIR=F:/Media' > .env
-   ```
+   The root `.env` holds what compose itself interpolates: the host media
+   root, the compose subnet, the qBittorrent WebUI port, the search plugin
+   list. `gluetun/vpn.env` holds your VPN provider block; the example file
+   shows NordVPN and the WireGuard-file path for Mullvad, Proton, AirVPN and
+   others. No VPN account password is ever collected.
 
    Downloads land in `MEDIA_HOST_DIR/_incoming/<Movies|Shows>` and the
    orchestrator moves them into `<Movies|Shows>` once named, so Jellyfin never
-   sees a raw release (see [docs/host-setup.md](docs/host-setup.md)).
+   sees a raw release. `MEDIA_HOST_DIR` is the host path compose mounts;
+   qBittorrent, torrent-downloader and the orchestrator all see it at `/media`
+   (`MEDIA_MOUNT_PATH`), so no path is ever translated between them.
 
-   The same directory appears under three names because three different
-   processes see it: `MEDIA_HOST_DIR` is the host path compose mounts,
-   `MEDIA_HOST_PATH` (downloader) is the host path handed to host-installed
-   qBittorrent, and `MEDIA_MOUNT_PATH` (orchestrator) is the in-container mount
-   point. They are not duplicates of one setting.
+3. **Provision qBittorrent** (once, and any time you want the settings
+   re-applied). Starts gluetun and qBittorrent, seeds the WebUI API key into
+   both qBittorrent and `torrent-downloader/.env`, binds qBittorrent to the
+   tunnel, installs the completion hook and the search plugins, and sets an
+   admin password into `qbittorrent/admin-password`:
 
-3. **Run** (compose fails fast if any service `.env` is missing, by design):
+   ```bash
+   bin/medialab-qbt-provision.sh
+   ```
+
+4. **Run** (compose fails fast if any service `.env` is missing, by design):
 
    ```bash
    docker compose --env-file .env --env-file .versions.env up -d
@@ -110,14 +122,17 @@ image.
    files are named explicitly. A bare `docker compose up -d` still works, with
    `:dev` image tags.
 
-Editing a `.env` after the stack is up takes effect only on recreate:
-`docker compose up -d --force-recreate <service>`.
+Editing a `.env` after the stack is up takes effect only on recreate. After a
+change to `gluetun/vpn.env` run a plain `docker compose up -d`: compose then
+recreates gluetun and every container in its namespace together. A
+gluetun-only recreate leaves qBittorrent and the downloader on a dead
+namespace.
 
 ### Completion webhook
 
-qBittorrent's "Run external program on torrent completion" must invoke the
-orchestrator's standalone relay, `scripts/notify_complete.py`, so finished
-downloads enter the post-download pipeline. Setup is in the
+qBittorrent's "Run external program on torrent completion" is a `curl` POST to
+the orchestrator from inside the namespace, set by the provision script. The
+command and the deprecated host-side relay are documented in the
 [orchestrator README](medialab-orchestrator/README.md). Making the whole stack
 start with the machine: [docs/host-setup.md](docs/host-setup.md).
 
@@ -135,7 +150,8 @@ version as the `APP_VERSION` build arg, which each Dockerfile bakes in as the
 | `bin/medialab-status.sh` | skew table: local / pinned / built / running / latest tag |
 | `bin/medialab-release.sh <repo> <major\|minor\|patch>` | cut a release: date the changelog, tag, push, bump the root pin |
 | `bin/medialab-drift.sh` | fail if shared tooling config differs between repos |
-| `bin/medialab-doctor.sh` | is the stack up: engine, containers, host apps, gateway health, bot login |
+| `bin/medialab-doctor.sh` | is the stack up: engine, containers, qBittorrent WebUI, Jellyfin, gateway health with the VPN bound, bot login |
+| `bin/medialab-qbt-provision.sh` | seed the qBittorrent API key, bind to the tunnel, install the hook and search plugins; idempotent |
 
 Service names, image names and `*_VERSION` variables are derived from
 `docker-compose.yml` by `bin/lib.sh`. Adding a service means adding it to the
