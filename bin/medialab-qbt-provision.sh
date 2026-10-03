@@ -24,6 +24,11 @@
 # would reveal a key.
 set -euo pipefail
 
+# Git Bash on Windows rewrites arguments that look like POSIX paths (/media)
+# into C:/Program Files/Git/... before a native program such as python sees
+# them. The container paths below must reach qBittorrent untouched.
+export MSYS_NO_PATHCONV=1
+
 # shellcheck source=lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 cd "${REPO_ROOT}"
@@ -107,7 +112,7 @@ conf, key = pathlib.Path(sys.argv[1]), sys.argv[2]
 text = conf.read_text() if conf.exists() else ""
 line = f"WebUI\\APIKey={key}"
 if re.search(r"^WebUI\\APIKey=", text, re.M):
-    text = re.sub(r"^WebUI\\APIKey=.*$", line, text, count=1, flags=re.M)
+    text = re.sub(r"^WebUI\\APIKey=.*$", lambda _match: line, text, count=1, flags=re.M)
 elif "[Preferences]" in text:
     text = text.replace("[Preferences]", f"[Preferences]\n{line}", 1)
 else:
@@ -120,8 +125,24 @@ say ok "WebUI API key seeded in qbittorrent/config"
 # 2. Bring the namespace up and wait.
 compose_args=(--project-directory "${REPO_ROOT}" --env-file "${ROOT_ENV}")
 [ -f "${REPO_ROOT}/.versions.env" ] && compose_args+=(--env-file "${REPO_ROOT}/.versions.env")
-run docker compose "${compose_args[@]}" up -d gluetun qbittorrent
+# gluetun can rotate through several VPN servers before one passes its health
+# check (over a minute with some providers), longer than compose waits on a
+# service_healthy dependency. Start gluetun alone, wait for health here, then
+# start qBittorrent.
+run docker compose "${compose_args[@]}" up -d gluetun
 [ -n "${DRY}" ] && { say ok "dry run complete"; exit 0; }
+
+gluetun_health() {
+  docker inspect --format '{{.State.Health.Status}}' \
+    "$(docker compose "${compose_args[@]}" ps -q gluetun)" 2>/dev/null || echo unknown
+}
+for _ in $(seq 1 "${WAIT_ATTEMPTS}"); do
+  [ "$(gluetun_health)" = "healthy" ] && break
+  sleep "${WAIT_SECONDS}"
+done
+[ "$(gluetun_health)" = "healthy" ] || { echo "gluetun did not become healthy; check docker compose logs gluetun" >&2; exit 1; }
+say ok "gluetun tunnel healthy"
+docker compose "${compose_args[@]}" up -d qbittorrent
 
 qb() { # path [curl args...]
   curl -sS --max-time "${CURL_TIMEOUT_SECONDS}" -H "${QBT_INTERNAL_HOST_HEADER}" \
@@ -163,7 +184,9 @@ if admin_password:
 print(json.dumps(prefs))
 PY
 )"
-code="$(qb /app/setPreferences -o /dev/null -w '%{http_code}' --data-urlencode "json=${prefs_json}")"
+# The status code rides on its own last line; no -o /dev/null, which Git Bash
+# cannot translate once path conversion is off.
+code="$(qb /app/setPreferences -w '\n%{http_code}' --data-urlencode "json=${prefs_json}" | tail -n1)"
 [ "${code}" = "200" ] || { echo "setPreferences returned ${code}" >&2; exit 1; }
 say ok "preferences applied (interface ${TUNNEL_INTERFACE}, hook, staging path)"
 if [ -n "${admin_password}" ]; then
@@ -185,7 +208,7 @@ for name in "${names[@]}"; do
   sources="${sources:+${sources}|}${PLUGIN_SOURCE_BASE}/${name}.py"
 done
 if [ -n "${sources}" ]; then
-  qb /search/installPlugin -o /dev/null --data-urlencode "sources=${sources}"
+  qb /search/installPlugin --data-urlencode "sources=${sources}" >/dev/null
   sleep "${WAIT_SECONDS}"
   installed="$(qb /search/plugins | python -c 'import json, sys; print(", ".join(sorted(p["name"] for p in json.load(sys.stdin))))')"
   say ok "search plugins: ${installed:-none}"
