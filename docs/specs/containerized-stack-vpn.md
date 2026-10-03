@@ -1,6 +1,6 @@
 # Spec: containerized qBittorrent behind a VPN kill-switch
 
-Status: Draft
+Status: Approved
 Issue: MickMarch/medialab#28
 
 Revised after the practice lab in
@@ -215,17 +215,19 @@ restart; plugin install lands in `/config/qBittorrent/nova3/engines`.
     on `127.0.0.1` all work there; only the save-path join (decision 10)
     stood in the way. Cost: the downloader's port must avoid gluetun's 8000
     and the orchestrator addresses it through `gluetun`.
+12. **Admin password is set once through the API and written to a
+    gitignored file for the operator.** Rejected: leaving linuxserver's
+    per-boot temporary password. The operator will open the WebUI
+    occasionally and should not have to read a container log for it. The
+    hash format only matters when seeding the conf, which we do not do for
+    the password.
+13. **Search plugin list is a workspace setting, `QBT_SEARCH_PLUGINS`, with
+    a shipped default.** Rejected: hardcoding the list in the provision
+    script. Plugins come and go; a setting keeps the change to `.env`.
 
 ## Open questions
 
-1. **Admin password.** Set a random one through the API and hand it to the
-   operator, or leave the WebUI on linuxserver's per-boot temporary password
-   and treat the API key as the only credential? Leaning: set it; the
-   operator will want the WebUI occasionally, and the hash format only
-   matters if we seed it in the conf, which we do not.
-2. **Plugin list.** Hardcode a default set in the provision script, or make it
-   a setting? Leaning: a `QBT_SEARCH_PLUGINS` list in the workspace `.env`
-   with a sensible default.
+None. Former questions 1 and 2 are decisions 12 and 13.
 
 ## Test plan
 
