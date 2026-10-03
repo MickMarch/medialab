@@ -1,0 +1,11 @@
+# Fixture for bin/tests/test_lib.sh: one built service, one third-party image.
+name: medialab-libtest
+
+services:
+  medialab-built:
+    build:
+      context: .
+    image: medialab/medialab-built:${MEDIALAB_BUILT_VERSION:-dev}
+
+  thirdparty:
+    image: example/thirdparty:1.2.3

@@ -139,7 +139,11 @@ version as the `APP_VERSION` build arg, which each Dockerfile bakes in as the
 
 Service names, image names and `*_VERSION` variables are derived from
 `docker-compose.yml` by `bin/lib.sh`. Adding a service means adding it to the
-compose file and nothing else.
+compose file and nothing else. A service with a `build:` key is one of ours:
+it lives in a submodule and its git tag becomes the image version. A service
+with only an `image:` is a pulled third-party image; the version and build
+scripts skip it and `medialab-status` lists it separately. `bin/tests/`
+exercises the helpers against a fixture compose file.
 
 A version string feeds two grammars, Docker tags (no `+`) and PEP 440 (no raw
 `-N-gHASH`), so untagged commits map to `X.Y.Z.postN` and dirty trees to
