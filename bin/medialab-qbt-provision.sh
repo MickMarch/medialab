@@ -12,10 +12,11 @@
 #      matches.
 #   2. Starts gluetun and qbittorrent, waits for the tunnel to be healthy and
 #      the WebUI to answer.
-#   3. setPreferences over the API: interface bound to the tunnel (tun0), UPnP
-#      and local discovery off, queueing off, staging save path, the curl
-#      completion hook carrying the gateway key, and once, a random admin
-#      password written to qbittorrent/admin-password for the operator.
+#   3. Installs the completion hook (qbittorrent/config/hooks/notify-complete.sh
+#      plus notify.env holding the gateway key), then setPreferences over the
+#      API: interface bound to the tunnel (tun0), UPnP and local discovery off,
+#      queueing off, staging save path, autorun pointing at the hook, and once,
+#      a random admin password written to qbittorrent/admin-password.
 #   4. Installs the search plugins named in QBT_SEARCH_PLUGINS (root .env).
 #
 # Inputs: root .env (MEDIA_HOST_DIR, QBT_WEBUI_PORT, QBT_SEARCH_PLUGINS),
@@ -23,6 +24,11 @@
 # medialab-orchestrator/.env (API_KEY, for the hook). Nothing is printed that
 # would reveal a key.
 set -euo pipefail
+
+# Git Bash on Windows rewrites arguments that look like POSIX paths (/media)
+# into C:/Program Files/Git/... before a native program such as python sees
+# them. The container paths below must reach qBittorrent untouched.
+export MSYS_NO_PATHCONV=1
 
 # shellcheck source=lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -50,7 +56,6 @@ TUNNEL_INTERFACE="tun0"
 MEDIA_MOUNT="/media"
 STAGING_SUBDIR="_incoming"
 ORCHESTRATOR_INTERNAL_URL="http://medialab-orchestrator:8000"
-WEBHOOK_PATH="/api/v1/webhooks/torrent-complete"
 API_KEY_PREFIX="qbt_"
 API_KEY_RANDOM_LENGTH=28
 WAIT_ATTEMPTS=60
@@ -107,7 +112,7 @@ conf, key = pathlib.Path(sys.argv[1]), sys.argv[2]
 text = conf.read_text() if conf.exists() else ""
 line = f"WebUI\\APIKey={key}"
 if re.search(r"^WebUI\\APIKey=", text, re.M):
-    text = re.sub(r"^WebUI\\APIKey=.*$", line, text, count=1, flags=re.M)
+    text = re.sub(r"^WebUI\\APIKey=.*$", lambda _match: line, text, count=1, flags=re.M)
 elif "[Preferences]" in text:
     text = text.replace("[Preferences]", f"[Preferences]\n{line}", 1)
 else:
@@ -120,8 +125,24 @@ say ok "WebUI API key seeded in qbittorrent/config"
 # 2. Bring the namespace up and wait.
 compose_args=(--project-directory "${REPO_ROOT}" --env-file "${ROOT_ENV}")
 [ -f "${REPO_ROOT}/.versions.env" ] && compose_args+=(--env-file "${REPO_ROOT}/.versions.env")
-run docker compose "${compose_args[@]}" up -d gluetun qbittorrent
+# gluetun can rotate through several VPN servers before one passes its health
+# check (over a minute with some providers), longer than compose waits on a
+# service_healthy dependency. Start gluetun alone, wait for health here, then
+# start qBittorrent.
+run docker compose "${compose_args[@]}" up -d gluetun
 [ -n "${DRY}" ] && { say ok "dry run complete"; exit 0; }
+
+gluetun_health() {
+  docker inspect --format '{{.State.Health.Status}}' \
+    "$(docker compose "${compose_args[@]}" ps -q gluetun)" 2>/dev/null || echo unknown
+}
+for _ in $(seq 1 "${WAIT_ATTEMPTS}"); do
+  [ "$(gluetun_health)" = "healthy" ] && break
+  sleep "${WAIT_SECONDS}"
+done
+[ "$(gluetun_health)" = "healthy" ] || { echo "gluetun did not become healthy; check docker compose logs gluetun" >&2; exit 1; }
+say ok "gluetun tunnel healthy"
+docker compose "${compose_args[@]}" up -d qbittorrent
 
 qb() { # path [curl args...]
   curl -sS --max-time "${CURL_TIMEOUT_SECONDS}" -H "${QBT_INTERNAL_HOST_HEADER}" \
@@ -137,9 +158,31 @@ done
 [[ "${version:-}" == 2.* ]] || { echo "qBittorrent WebUI did not answer with the seeded key at ${WEBUI_URL}" >&2; exit 1; }
 say ok "qBittorrent web API ${version} answering with the seeded key"
 
-# 3. Preferences. The hook is one curl inside the namespace; the gateway key
-# is the same one the bot and web use. web_ui_password is set once.
-hook="curl -s -X POST ${ORCHESTRATOR_INTERNAL_URL}${WEBHOOK_PATH} -H \"Content-Type: application/json\" -H \"X-API-Key: ${gateway_key}\" -d \"{\\\"hash\\\":\\\"%I\\\",\\\"name\\\":\\\"%N\\\",\\\"content_path\\\":\\\"%F\\\"}\""
+# 3. Completion hook. qBittorrent runs the autorun command without a shell, so
+# JSON cannot be quoted inline; a small script in the mounted config dir builds
+# the body (python3 ships in the image) and reads the gateway key from an env
+# file beside it, never from the preference string. Container path: /config.
+hooks_dir="${QBT_DIR}/config/hooks"
+mkdir -p "${hooks_dir}"
+cat > "${hooks_dir}/notify-complete.sh" <<'HOOK'
+#!/bin/sh
+# qBittorrent "run on completion" hook: POST {hash, name, content_path} to the
+# orchestrator. Args: %I %N %F. Written by bin/medialab-qbt-provision.sh.
+set -eu
+. /config/hooks/notify.env
+body="$(python3 -c 'import json, sys; print(json.dumps({"hash": sys.argv[1], "name": sys.argv[2], "content_path": sys.argv[3]}))' "$1" "$2" "${3:-}")"
+curl -s -X POST "${ORCHESTRATOR_URL}/api/v1/webhooks/torrent-complete" \
+  -H "Content-Type: application/json" -H "X-API-Key: ${ORCHESTRATOR_API_KEY}" \
+  --data-binary "${body}" >/dev/null
+HOOK
+chmod +x "${hooks_dir}/notify-complete.sh"
+umask 077
+printf 'ORCHESTRATOR_URL=%s\nORCHESTRATOR_API_KEY=%s\n' "${ORCHESTRATOR_INTERNAL_URL}" "${gateway_key}" > "${hooks_dir}/notify.env"
+umask 022
+say ok "completion hook installed in qbittorrent/config/hooks"
+
+# Preferences. web_ui_password is set once.
+hook='/config/hooks/notify-complete.sh "%I" "%N" "%F"'
 admin_password=""
 if [ ! -f "${ADMIN_PASSWORD_FILE}" ]; then
   admin_password="$(python -c "import secrets; print(secrets.token_urlsafe(18))")"
@@ -163,7 +206,9 @@ if admin_password:
 print(json.dumps(prefs))
 PY
 )"
-code="$(qb /app/setPreferences -o /dev/null -w '%{http_code}' --data-urlencode "json=${prefs_json}")"
+# The status code rides on its own last line; no -o /dev/null, which Git Bash
+# cannot translate once path conversion is off.
+code="$(qb /app/setPreferences -w '\n%{http_code}' --data-urlencode "json=${prefs_json}" | tail -n1)"
 [ "${code}" = "200" ] || { echo "setPreferences returned ${code}" >&2; exit 1; }
 say ok "preferences applied (interface ${TUNNEL_INTERFACE}, hook, staging path)"
 if [ -n "${admin_password}" ]; then
@@ -185,7 +230,7 @@ for name in "${names[@]}"; do
   sources="${sources:+${sources}|}${PLUGIN_SOURCE_BASE}/${name}.py"
 done
 if [ -n "${sources}" ]; then
-  qb /search/installPlugin -o /dev/null --data-urlencode "sources=${sources}"
+  qb /search/installPlugin --data-urlencode "sources=${sources}" >/dev/null
   sleep "${WAIT_SECONDS}"
   installed="$(qb /search/plugins | python -c 'import json, sys; print(", ".join(sorted(p["name"] for p in json.load(sys.stdin))))')"
   say ok "search plugins: ${installed:-none}"
