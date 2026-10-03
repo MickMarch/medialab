@@ -1,0 +1,9 @@
+# Overlay for VPN providers that issue a WireGuard .conf file (Mullvad, Proton,
+# AirVPN, IVPN). gluetun reads every field from it; the Endpoint must be an IP.
+#   docker compose -f docker-compose.yml -f compose.wgfile.yml up -d
+# gluetun/vpn.env then needs only VPN_SERVICE_PROVIDER=custom and
+# VPN_TYPE=wireguard.
+services:
+  gluetun:
+    volumes:
+      - ./gluetun/wg0.conf:/gluetun/wireguard/wg0.conf:ro

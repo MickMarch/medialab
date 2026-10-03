@@ -52,8 +52,9 @@ is `Running`, and `curl http://127.0.0.1:8096/health` prints `Healthy`.
 
 ## 2. Automatic logon plus immediate lock
 
-Docker Desktop and qBittorrent need an interactive session. Windows logs the
-account in at boot and a task locks the desktop seconds later.
+Docker Desktop needs an interactive session (qBittorrent no longer does: it
+runs as a container). Windows logs the account in at boot and a task locks the
+desktop seconds later.
 
 1. Automatic logon. Use Sysinternals Autologon so the credential lands in the
    LSA secret store, not the plain registry:
@@ -108,9 +109,12 @@ warns when either is missing.
 
 ## 5. Things already right, left alone
 
-- qBittorrent starts at logon from `HKCU\...\Run` and must stay a GUI process
-  (its Web UI and search plugins live there).
 - The containers carry `restart: unless-stopped`; they return with the engine.
+  That now includes gluetun and qBittorrent: there is no host qBittorrent to
+  start at logon, no `HKCU\...\Run` entry for it, and no completion `.bat`.
+  If a host qBittorrent is still installed from before the containerized
+  stack, disable its autostart so two clients never fight over the staging
+  folders, and remove `bin/notify-complete.bat`.
 - Power plan: sleep on AC is never, hibernate off, wake timers allowed.
 
 ## 6. Post-logon self-check (optional)
@@ -168,6 +172,9 @@ another device. Only the web UI and Jellyfin are.
 
 Reboot and do not touch the keyboard. Within five minutes
 `bin/medialab-doctor.sh` is all `ok` (read `.doctor-boot.log`, run it over
-SSH, or ask the bot `/storage` from Discord). Passed on this host 2026-09-21:
-logon +21 s, lock +43 s, full stack by about +1 min. A logoff is not a reboot: Jellyfin (SYSTEM task) survives it,
-Docker and qBittorrent do not, by design.
+SSH, or ask the bot `/storage` from Discord). Passed on this host 2026-09-21
+with host qBittorrent: logon +21 s, lock +43 s, full stack by about +1 min.
+With the containerized stack allow another minute: gluetun must bring the
+tunnel up and pass its health check before qBittorrent and the downloader
+start. A logoff is not a reboot: Jellyfin (SYSTEM task) survives it, Docker
+does not, by design.

@@ -1,27 +1,85 @@
 # medialab workspace compose.
 #
-# All services run as containers on one shared network and reach host-installed
-# apps (qBittorrent, Jellyfin) over host.docker.internal. Each service keeps its
-# own .env (per-service env_file below) - there is no shared service .env. The
-# one value compose itself interpolates is MEDIA_HOST_DIR (the host media root
-# bind-mounted into the services that touch files); set it in a root .env or the
-# shell environment. See medialab-setup (roadmap item 8) for guided setup.
+# Torrent traffic lives inside one network namespace owned by gluetun, the VPN
+# client: qBittorrent and torrent-downloader both join it with
+# network_mode: service:gluetun, so their only route out is the WireGuard
+# tunnel and a dropped tunnel means no route at all. The other services share
+# the compose network and reach the downloader through gluetun's service name.
+# Jellyfin stays a host app reached over host.docker.internal.
+#
+# Each medialab service keeps its own .env (per-service env_file below); there
+# is no shared service .env. Compose itself interpolates the values in the root
+# .env (see .env.example): the host media root, the compose subnet, the
+# qBittorrent WebUI port. The VPN provider settings live in gluetun/vpn.env.
 #
 # Per-service *_VERSION vars tag the built images and stamp APP_VERSION into each
 # build (hatch-vcs version + OCI image.version label). They are generated from the
 # pinned submodules' git tags by bin/medialab-versions.sh into .versions.env
 # (gitignored); run bin/medialab-build.sh to regenerate + build. Absent the file,
-# the ':-dev' fallbacks keep a bare 'docker compose build' working.
+# the ':-dev' fallbacks keep a bare 'docker compose build' working. gluetun and
+# qbittorrent are pulled third-party images with no build key; bin/lib.sh keeps
+# them out of the version tooling.
 
 name: medialab
 
 services:
+  gluetun:
+    # VPN client and firewall. Provider, keys and server filters come from
+    # gluetun/vpn.env; nothing provider-specific lives in this file. Switching
+    # providers is editing that file and running `docker compose up -d`.
+    image: qmcgaw/gluetun:v3
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    env_file:
+      - ./gluetun/vpn.env
+    environment:
+      # The compose subnet is the one non-tunnel destination allowed, so the
+      # completion hook can reach the orchestrator and the orchestrator can
+      # reach the downloader. Must not overlap the provider's tunnel range.
+      FIREWALL_OUTBOUND_SUBNETS: ${MEDIALAB_SUBNET:-172.28.77.0/24}
+      TZ: ${TZ:-UTC}
+    ports:
+      # qBittorrent WebUI for the operator, loopback only. Everything that
+      # listens inside the namespace is published here, on gluetun.
+      - "127.0.0.1:${QBT_WEBUI_PORT:-8090}:8080"
+    networks:
+      - internal
+    restart: unless-stopped
+
+  qbittorrent:
+    # Shares gluetun's namespace: no ports, no networks of its own. The config
+    # directory is a bind mount so bin/medialab-qbt-provision.sh can seed the
+    # API key before first start.
+    image: lscr.io/linuxserver/qbittorrent:5.2.4
+    network_mode: "service:gluetun"
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: ${TZ:-UTC}
+      WEBUI_PORT: "8080"
+    volumes:
+      - "./qbittorrent/config:/config"
+      # Same host directory the orchestrator mounts, at the same path, so the
+      # save path the downloader hands over needs no translation.
+      - "${MEDIA_HOST_DIR}:/media"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    restart: unless-stopped
+
   torrent-downloader:
+    # Also inside gluetun's namespace: qBittorrent is 127.0.0.1:8080, DNS is
+    # gluetun's DNS-over-TLS forwarder, TMDB and details-page fetches leave
+    # through the tunnel. Listens on 8001 (gluetun's control server owns 8000)
+    # and is addressed by the orchestrator as http://gluetun:8001.
     build:
       context: ./torrent-downloader
       args:
         APP_VERSION: ${TORRENT_DOWNLOADER_VERSION:-dev}
     image: medialab/torrent-downloader:${TORRENT_DOWNLOADER_VERSION:-dev}
+    network_mode: "service:gluetun"
     env_file:
       - ./torrent-downloader/.env
     volumes:
@@ -30,10 +88,11 @@ services:
       # a volume every image rebuild wiped it and long downloads 404'd at
       # RESOLVE_META. Path matches CACHE_DIRECTORY=.cache under WORKDIR /app.
       - "downloader-cache:/app/.cache"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    networks:
-      - internal
+    depends_on:
+      gluetun:
+        condition: service_healthy
+      qbittorrent:
+        condition: service_started
     restart: unless-stopped
 
   medialab-jellyfin:
@@ -60,13 +119,13 @@ services:
       - ./medialab-orchestrator/.env
     ports:
       # Loopback only: the bot and the web UI reach the gateway over the compose
-      # network, the qBittorrent completion hook over localhost. Nothing on the
-      # LAN or Meshnet needs it; the web UI (8081) is the remote surface.
+      # network, the completion hook from inside gluetun's namespace. Nothing
+      # on the LAN or Meshnet needs it; the web UI (8081) is the remote surface.
       - "127.0.0.1:8000:8000"
     volumes:
-      # Shared media volume: the orchestrator renames TV folders through this
-      # mount (MEDIA_MOUNT_PATH=/media in its .env). qBittorrent on the host
-      # writes the same dir, so the container path mirrors the host layout.
+      # Shared media volume: the orchestrator renames through this mount
+      # (MEDIA_MOUNT_PATH=/media in its .env); qBittorrent writes the same
+      # directory at the same path.
       - "${MEDIA_HOST_DIR}:/media"
       # Persist the SQLite job store across restarts.
       - "orchestrator-data:/app/data"
@@ -119,6 +178,10 @@ services:
 networks:
   internal:
     driver: bridge
+    # Fixed so gluetun's FIREWALL_OUTBOUND_SUBNETS can name it.
+    ipam:
+      config:
+        - subnet: ${MEDIALAB_SUBNET:-172.28.77.0/24}
 
 volumes:
   orchestrator-data:
