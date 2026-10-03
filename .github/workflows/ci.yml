@@ -22,4 +22,7 @@ jobs:
         run: bin/medialab-drift.sh
 
       - name: Shellcheck
-        run: shellcheck -x -P bin bin/*.sh
+        run: shellcheck -x -P bin bin/*.sh bin/tests/*.sh
+
+      - name: bin/lib.sh tests
+        run: bin/tests/test_lib.sh

@@ -8,6 +8,8 @@
 #
 # A clean stack has local == built == running and local == the newest tag.
 # Service names, image names and *_VERSION vars come from the compose file.
+# Third-party image services have no submodule or tag of ours; they are
+# listed after the table with their pinned image reference and running state.
 set -euo pipefail
 
 # shellcheck source=lib.sh
@@ -56,6 +58,12 @@ running_ver() {
   label_of "${cid}"
 }
 
+# Running state of the container for a compose service name, or "".
+running_state() {
+  docker ps --filter "label=com.docker.compose.service=$1" \
+    --format '{{.Status}}' 2>/dev/null | head -n1
+}
+
 latest_tag() {
   git -C "$1" ls-remote --tags --sort=-v:refname origin 2>/dev/null \
     | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || true
@@ -78,3 +86,15 @@ while IFS= read -r svc; do
     "$(na "$(running_ver "${svc}")")" \
     "$(na "$(latest_tag "${svc}")")"
 done < <(medialab_services)
+
+third_party="$(medialab_third_party_services)"
+if [ -n "${third_party}" ]; then
+  printf '\n%-24s %-40s %-14s\n' THIRD-PARTY IMAGE RUNNING
+  printf '%-24s %-40s %-14s\n' ----------- ----- -------
+  while IFS= read -r svc; do
+    printf '%-24s %-40s %-14s\n' \
+      "${svc}" \
+      "$(medialab_image_ref "${svc}")" \
+      "$(na "$(running_state "${svc}")")"
+  done <<< "${third_party}"
+fi
