@@ -1,6 +1,6 @@
 # Spec: containerized qBittorrent behind a VPN kill-switch
 
-Status: Approved
+Status: Shipped
 Issue: MickMarch/medialab#28
 
 Revised after the practice lab in
@@ -196,10 +196,16 @@ restart; plugin install lands in `/config/qBittorrent/nova3/engines`.
    undocumented file format for settings the API exposes). Rejected: doing
    everything over the API (needs the first-boot temporary password from the
    log and a second restart so the downloader learns the key).
-9. **Completion hook is a `curl` autorun carrying the gateway key.**
-   Rejected: a dedicated hook secret. The key is readable only by holders of
-   the qBittorrent API key, which is the downloader; equivalent exposure to
-   today's `.bat` on the host, with one fewer secret to manage.
+9. **Completion hook is a script in the mounted config dir, called by
+   autorun; the gateway key sits in an env file beside it.** Amended at
+   cutover: qBittorrent runs the autorun command without a shell, so an
+   inline `curl` with quoted JSON reached the orchestrator with literal
+   backslashes and a 422 (the lab's echo server had accepted anything).
+   `qbittorrent/config/hooks/notify-complete.sh` builds the body with
+   `python3` and reads `notify.env`; autorun is
+   `/config/hooks/notify-complete.sh "%I" "%N" "%F"`. Rejected: a dedicated
+   hook secret, still; the same gateway key is used, now out of the
+   preference string. Verified live: 202 and the job advanced.
 10. **Paths unify on `/media` across qBittorrent and the orchestrator.**
     Rejected: keeping a host-path env in the downloader for compatibility.
     It was the source of the three-names-for-one-directory confusion.
@@ -228,6 +234,23 @@ restart; plugin install lands in `/config/qBittorrent/nova3/engines`.
 ## Open questions
 
 None. Former questions 1 and 2 are decisions 12 and 13.
+
+## Shipped notes (2026-10-03)
+
+- Cutover on the host: PRs MickMarch/medialab#109, #116, #117, #118,
+  torrent-downloader#46, medialab-orchestrator#54, medialab-web#21,
+  medialab-bot#55. Releases: torrent-downloader v1.21.0, orchestrator
+  v1.4.0, web v0.19.0, bot v2.15.0.
+- Live checks passed: egress through the tunnel, downloader reachable at
+  `gluetun:8001` with the VPN flag true, provisioning idempotent, a real
+  download placed into the library and deleted again, the completion hook
+  answered 202.
+- gluetun needed eleven NordVPN server rotations (about seventy seconds)
+  before one passed its health check; the provision script waits for health
+  itself rather than relying on compose's dependency wait.
+- Surfaced, tracked separately: re-downloading a deleted title hits the
+  unique `torrent_hash` (MickMarch/medialab#119); unreachable source pages
+  return 422 instead of a retryable error (MickMarch/medialab#110).
 
 ## Test plan
 
