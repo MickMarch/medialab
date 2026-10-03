@@ -1,157 +1,262 @@
-# Spec: containerized self-hostable stack + VPN enforcement
+# Spec: containerized qBittorrent behind a VPN kill-switch
 
-Status: Draft
+Status: Approved
 Issue: MickMarch/medialab#28
-Date: 2026-07-02
 
-Absorbs the VPN-enforcement hardening. Spec-first; no code until Approved.
+Revised after the practice lab in
+[docs/lab/containerized-qbittorrent](../lab/containerized-qbittorrent/README.md);
+its [FINDINGS.md](../lab/containerized-qbittorrent/FINDINGS.md) is the
+evidence behind every "verified" below. Jellyfin stays external; the setup
+wizard is MickMarch/medialab#23 and only consumes what this spec defines.
 
-## Hard invariant (non-negotiable)
+## Hard invariant
 
-**No torrent traffic - download OR seed/upload - may ever occur unless a VPN is
-active and bound. No bypass. No dev exception.** Every decision below is
-subordinate to this. If a design choice weakens it, the choice is wrong.
+No torrent traffic, download or seed, may ever occur unless a VPN tunnel is
+up and carrying it. No bypass, no dev exception. Every decision below is
+subordinate to this.
 
-## Goals
+## Problem
 
-1. Make the suite self-hostable: containerize the services medialab ships +
-   qBittorrent, so bring-up is (near) one command, minus unavoidable user
-   secrets.
-2. Enforce the VPN invariant with a physical kill-switch, not just an app check.
-3. Minimize the user's torrent fingerprint (stop seeding shortly after
-   completion).
-4. Keep it right for a single-user Windows host (not a server/multi-tenant
-   design).
+qBittorrent runs on the Windows host, bound by hand to a VPN adapter named in
+the downloader's allowlist. That makes the suite non-portable (the adapter
+name is provider-specific, the completion hook is a `.bat` holding the
+gateway key, the save path is a Windows path handed across a container
+boundary) and the kill-switch is an application assertion, not a property of
+the network. It also fails in practice when the host runs two VPNs: a second
+tunnel with lower route metrics carries the torrent traffic even though
+qBittorrent is "bound" to the first (MickMarch/medialab#30). Self-hosters
+without the same provider cannot follow the setup at all.
 
-## Decisions (locked with the user, 2026-07-02)
+## Goal and non-goals
 
-1. **Container scope: medialab services + qBittorrent; Jellyfin external.**
-   Containerize the four medialab services and qBittorrent (qBittorrent must be
-   containerized so its network can be VPN-bound as the kill-switch). Jellyfin
-   stays a connect-to dependency reached by URL - the user may run it native
-   (easy GPU transcoding on Windows) or in their own container. The app does not
-   own Jellyfin's lifecycle. Media directories stay on the host, bind-mounted
-   into the containers that touch files (qBittorrent, orchestrator).
-2. **VPN: bring-your-own, app-enforced, via a WireGuard config file (no
-   password).** No bundled VPN. Free VPNs are unsafe for torrenting (P2P-banned
-   on safe free tiers; the P2P-allowing free ones log / sell / exit-node traffic
-   - the opposite of a minimal fingerprint), so bundling one is a liability. The
-   *enforcement* is the product; the VPN subscription is the user's. Setup docs
-   recommend reputable privacy-first paid providers (Mullvad / ProtonVPN paid /
-   IVPN). **The user never types a VPN password into the app.** They generate a
-   WireGuard config on their provider's own website (a throwaway, revocable,
-   single-purpose key - NOT their account password; it cannot access their
-   account or billing) and drop the file in. This is both the safest mechanism
-   and the most comfortable UX: no account credential ever touches medialab, the
-   file comes from a source the user already trusts, and the key is revocable
-   from the provider's dashboard at any time. Solves the "why does a media app
-   want my VPN login" trust problem by never asking for the login.
-3. **Kill-switch = gluetun VPN-client container; qBittorrent routes through it.**
-   qBittorrent joins gluetun's network (`network_mode: service:gluetun`) and has
-   no independent internet route. gluetun holds the WireGuard tunnel and has a
-   built-in firewall kill-switch: if the tunnel drops, all non-tunnel egress is
-   blocked - qBittorrent physically *cannot* leak a packet (not "refuses to" -
-   cannot). This is a stronger guarantee than the current host `NordLynx`
-   interface binding, and it is automatic rather than a hand-configured setting.
-   gluetun is independently-audited open-source, so the trust surface is a
-   well-known VPN client, not medialab itself.
-4. **App-layer check stays as defense-in-depth.** torrent-downloader's
-   `is_vpn_bound()` pre-flight refusal on `POST /download` stays - it refuses to
-   *start* a download when the VPN is not confirmed, giving a clear error
-   instead of a silent stall. The check verifies gluetun's tunnel is up (see
-   open Q5 for depth: interface-present vs. IP-leak-test). The hardcoded
-   `NordLynx` literal becomes configurable so the check is provider/mechanism
-   agnostic. Two layers: physical (gluetun kill-switch) + assertion (app check).
-   Never bypassable, including in dev.
-5. **Seeding: stop N minutes after 100%, N configurable.** Default `N = 0` (stop
-   immediately at completion) to match the minimal-fingerprint goal, but
-   configurable up so a ratio-required tracker is not a dead end. A brief
-   non-zero window is the etiquette-friendly middle (some upload avoids peer
-   deprioritization). Ties into the settings store (item 9).
-6. **Environments: prod + staging full-function; dev dry-run by default.** Dev
-   defaults every download to `dry_run` but can be flipped to live for a real
-   test run. Dev with no VPN bound stays search-only (downloads refused by the
-   invariant - the correct behavior, not a limitation).
-7. **Painless-for-average-user is the setup wizard's job (item 8), not
-   containers.** Containers do not remove the unavoidable secrets (TMDB key,
-   Jellyfin key, VPN interface). The wizard hand-holds them. qBittorrent WebUI
-   credentials CAN be pre-provisioned in compose/setup so the user never
-   hand-copies that one.
+**Goal.** qBittorrent and torrent-downloader run as containers whose only
+network path is a gluetun WireGuard tunnel, so a dropped tunnel means no
+route rather than a refused request, and no torrent-related lookup or fetch
+ever leaves from the host's address or through the host's resolver. The VPN is bring-your-own: one provider env file, swappable
+without touching anything else. First boot needs no clicking in the
+qBittorrent UI. Paths, the completion hook and the VPN check become
+provider-agnostic constants.
 
-## Architecture (target)
+**Non-goals.** Bundling or recommending a specific VPN subscription. Owning
+Jellyfin's lifecycle. Multi-host or multi-user layouts. Per-environment
+compose overlays and a dev dry-run default, which move to their own issue.
+A delayed stop-seed window, which is a settings knob on the existing
+STOP_SEEDING step and not part of this change.
+
+## Design
+
+### Topology
 
 ```
-                    +-- VPN interface (host or container tunnel) --+
-                    |   qBittorrent BINDS to it (kill-switch)      |
-                    v                                              |
-[qBittorrent container] --(bound egress only)------------------> internet
-        ^  no route if VPN down = traffic halts (invariant held)
-        |
-[torrent-downloader] --pre-flight is_vpn_bound() before POST /download
-        ^
-[orchestrator] --gateway; refuses/annotates VPN-down (see open Q)
-        ^
-[medialab-bot] --surfaces VPN status to the user
-        |
-[medialab-jellyfin] --> Jellyfin (EXTERNAL: native or user container) by URL
-
-Media dir: host, bind-mounted into qBittorrent + orchestrator.
+                 compose network (internal)
+ medialab-bot / medialab-web --> medialab-orchestrator --> torrent-downloader
+                                        ^                         |
+                                        | completion hook         | qBittorrent API
+                                        | (curl from inside       v  http://gluetun:8080
+                                        |  the gluetun namespace) +---------------------+
+                                        +-------------------------| gluetun             |
+                                                                  |  WireGuard tun0     |
+                                                                  |  firewall           |
+                                                                  |  qbittorrent        |
+                                                                  |  (network_mode:     |
+                                                                  |   service:gluetun)  |
+                                                                  +----------+----------+
+                                                                             | tunnel only
+                                                                             v
+                                                                          internet
+ /media bind mount: host MEDIA_HOST_DIR -> /media in qbittorrent AND orchestrator
 ```
 
-## Per-repo impact (sketch - versions decided at release, not predicted)
+### Compose services added
 
-- **torrent-downloader:** make the VPN interface name configurable
-  (`VPN_INTERFACE`, no default that assumes a provider - required at runtime for
-  downloads). `is_vpn_bound()` reads config, not the `NordLynx` literal. Add the
-  post-completion stop-seed delay (`SEED_MINUTES_AFTER_COMPLETE`, default 0).
-  `/health` reports VPN interface + bound status.
-- **orchestrator:** decide whether the gateway refuses downloads when VPN is
-  down (open Q) and surfaces VPN status in aggregated `/health`. The STOP_SEEDING
-  pipeline step already exists; align it with the delayed-stop setting or keep
-  the delay entirely inside torrent-downloader (open Q).
-- **medialab-bot:** surface VPN-down to the user (startup health + at download
-  confirm). Best-practice: refuse/​warn at the confirm step, not a silent stall.
-- **compose:** qBittorrent service added, VPN-bound; base + dev/staging/prod
-  overlays; qBittorrent WebUI creds pre-provisioned; Jellyfin stays external
-  (URL only).
-- **medialab-setup (item 8):** wizard collects VPN interface, TMDB key, Jellyfin
-  URL+key; verifies the VPN binding before first run.
+| Service | Image | Notes |
+|---|---|---|
+| `gluetun` | `qmcgaw/gluetun` (pinned major) | `cap_add: NET_ADMIN`, `/dev/net/tun`, `env_file: ./gluetun/vpn.env`, `FIREWALL_OUTBOUND_SUBNETS` set to the compose subnet (fixed via `ipam`), control server with API-key auth on loopback only, healthcheck built in. |
+| `qbittorrent` | `lscr.io/linuxserver/qbittorrent` (pinned, >= 5.2) | `network_mode: service:gluetun`, `depends_on: gluetun: condition: service_healthy`, volumes `qbittorrent-config:/config` and `${MEDIA_HOST_DIR}:/media`. No ports of its own; the WebUI is published on `gluetun` to `127.0.0.1` for the operator. |
+| `torrent-downloader` (moved) | existing image | Also `network_mode: service:gluetun`. Talks to qBittorrent on `127.0.0.1:8080`, listens on `API_PORT=8001` (8000 is gluetun's control server in the shared namespace), and is addressed by the orchestrator as `http://gluetun:8001`. Its DNS is gluetun's DNS-over-TLS forwarder and its egress (TMDB, details-page scraping, plugin fetches) is the tunnel. Verified in the lab's second run. |
+
+gluetun and qBittorrent are third-party images with no `build:` key. `bin/lib.sh` gains a
+filter so version and build scripts iterate only built services; a
+`medialab_third_party_services` helper lists the rest for `medialab-status`.
+
+### Bring-your-own VPN
+
+One gitignored file, `gluetun/vpn.env`, holding exactly one provider block.
+`gluetun/vpn.env.example` ships the NordVPN block (native provider, needs
+only `WIREGUARD_PRIVATE_KEY` and a server filter), a `custom` block for
+providers that issue a WireGuard `.conf` (mounted at
+`/gluetun/wireguard/wg0.conf` through a documented overlay), and a pointer to
+gluetun's provider list for everything else. Switching provider is: edit the
+file, run `docker compose up -d`. The tunnel interface inside the namespace is
+always `tun0`, so nothing downstream changes. Verified: a gluetun-only
+recreate orphans qBittorrent; a plain `up -d` recreates both correctly.
+
+### Paths
+
+`/media` is one bind mount seen identically by qBittorrent and the
+orchestrator. torrent-downloader's `MEDIA_HOST_PATH` (a Windows path handed
+to host qBittorrent) becomes `MEDIA_MOUNT_PATH=/media`, the same name and
+meaning as the orchestrator's. Save path per add becomes
+`<MEDIA_MOUNT_PATH>/<STAGING_SUBDIR>/<MEDIA_TYPE_SUBDIRS[media_type]>`, built
+from `medialab-contracts` constants and joined with `/`. The current builder
+joins with backslashes for host qBittorrent on Windows; verified in the lab
+that Linux qBittorrent then treats `/media\_incoming\Movies` as one filename
+at `/` and the torrent errors. This change is a prerequisite for the move. The hook's `content_path` is already a
+container path on the same mount, so no translation remains anywhere.
+`docs/decisions/0001` gets a follow-up note.
+
+### VPN check (defense in depth, two layers)
+
+1. **Physical.** gluetun's firewall: with the tunnel down, nothing in the
+   namespace has a route. Verified with the control server stopping the
+   tunnel. gluetun also gates qBittorrent's start through the healthcheck
+   and self-heals a dead tunnel (`HEALTH_RESTART_VPN`).
+2. **Assertion.** torrent-downloader's existing `is_vpn_bound()` stays and
+   keeps refusing `POST /download` unless `current_interface_name` is in
+   `VPN_INTERFACES`. The shipped default becomes `tun0` instead of
+   `NordLynx`. Empty still means deny all.
+
+The orchestrator's aggregated `/health` exposes the downloader's
+`vpn_interface_bound` flag so the web UI and the bot can show it; enforcement
+stays in one place.
+
+### Completion hook
+
+qBittorrent's autorun command becomes a `curl` POST from inside the
+namespace to
+`http://medialab-orchestrator:8000/api/v1/webhooks/torrent-complete` with the
+gateway `X-API-Key` header and the `{hash, name, content_path}` body.
+Verified: reaches the orchestrator by service name through gluetun's firewall
+and DNS, and the image ships `curl`. `scripts/notify_complete.py` and
+`bin/notify-complete.bat` are retired from the compose path (kept one release
+for host installs, then removed).
+
+### Zero-click provisioning
+
+A new idempotent script, `bin/medialab-qbt-provision.sh`, run by the operator
+once (and by the setup wizard later):
+
+1. If `qBittorrent.conf` has no `WebUI\APIKey`, generate a `qbt_`-prefixed
+   32-character key and write it into the conf before the container's first
+   start. Verified: the key is stored in plain text and honoured on boot.
+   The same value goes into torrent-downloader's `QB_API_KEY`.
+2. Start the stack, wait for gluetun health, then over the API with the
+   Bearer key: `setPreferences` for `current_network_interface=tun0`,
+   `upnp=false`, `lsd=false`, `queueing_enabled=false`, `save_path`,
+   `autorun_enabled` plus `autorun_program`, `web_ui_password` (random,
+   written to a gitignored file for the operator), and
+   `search/installPlugin` for the configured plugin list.
+
+Verified: every one of those preference writes took effect and survived a
+restart; plugin install lands in `/config/qBittorrent/nova3/engines`.
+
+### Per-repo changes
+
+| Repo | Change |
+|---|---|
+| torrent-downloader | `MEDIA_HOST_PATH` becomes `MEDIA_MOUNT_PATH` (container path, `/` join); `QB_HOST` example `127.0.0.1`; `API_PORT` example `8001`; `VPN_INTERFACES` default `tun0`; `.env.example` and README rewritten for the shared-namespace layout. |
+| medialab-orchestrator | `TORRENT_DOWNLOADER_URL` example becomes `http://gluetun:8001`; aggregated `/health` carries `vpn_interface_bound`; webhook README documents the curl autorun; `notify_complete.py` marked deprecated. |
+| medialab-web, medialab-bot | Show VPN status from aggregated health (web: status card; bot: startup health line). |
+| workspace | compose: `gluetun` and `qbittorrent` services, fixed subnet, `gluetun/vpn.env.example`, `compose.wgfile.yml` overlay; `bin/lib.sh` built-vs-third-party split; `bin/medialab-qbt-provision.sh`; README and `docs/host-setup.md` updated; `docs/secrets.md` gains the VPN key, qBittorrent API key and gluetun control key rows. |
+| medialab-contracts | None. |
+
+## Decisions
+
+1. **Containerize qBittorrent; Jellyfin stays external.** Rejected: leaving
+   qBittorrent on the host. Only a container can be given gluetun's namespace,
+   and the host layout is what fails under two VPNs.
+2. **Bring-your-own VPN via one gluetun env file; no bundled provider.**
+   Rejected: a free provider. Free tiers either block P2P or monetise
+   traffic, the opposite of the goal. Rejected: a `.conf`-only contract.
+   NordVPN, the maintainer's provider, does not issue files; gluetun's native
+   provider needs only a private key. Both paths are supported; the env file
+   is the contract.
+3. **gluetun is the kill-switch; `is_vpn_bound()` stays as the assertion
+   layer.** Rejected: dropping the app check as redundant. It costs one API
+   call and turns a silent stall into a clear `VPN_NOT_BOUND` error.
+4. **Enforcement in torrent-downloader only; the gateway surfaces, does not
+   refuse** (resolves former open question 3). Rejected: a second refusal at
+   the gateway. With a physical layer underneath, a third check adds
+   duplication without safety; status in `/health` gives the clients what
+   they need to warn before confirm.
+5. **Stop-seeding stays the orchestrator's STOP_SEEDING step** (resolves
+   former open question 2). It already removes the torrent once the pipeline
+   owns the files (decision 0003). A delay is a future settings knob on that
+   step, not a timer in the downloader, which would be lost on restart.
+6. **Tunnel verification is interface binding plus gluetun's own health**
+   (resolves former open question 5). Rejected: an external IP-leak probe in
+   the app. gluetun already dials out through the tunnel every few minutes
+   and restarts it on failure; a second probe adds a network dependency and a
+   new failure mode to the download path.
+7. **Environment overlays and dev dry-run move out** (resolves former open
+   question 4 by scoping it out). They are orthogonal to the kill-switch and
+   would double the compose surface of this change.
+8. **API key is pre-seeded in `qBittorrent.conf`; all other settings go over
+   the API.** Rejected: seeding everything in the conf (couples us to an
+   undocumented file format for settings the API exposes). Rejected: doing
+   everything over the API (needs the first-boot temporary password from the
+   log and a second restart so the downloader learns the key).
+9. **Completion hook is a `curl` autorun carrying the gateway key.**
+   Rejected: a dedicated hook secret. The key is readable only by holders of
+   the qBittorrent API key, which is the downloader; equivalent exposure to
+   today's `.bat` on the host, with one fewer secret to manage.
+10. **Paths unify on `/media` across qBittorrent and the orchestrator.**
+    Rejected: keeping a host-path env in the downloader for compatibility.
+    It was the source of the three-names-for-one-directory confusion.
+11. **torrent-downloader joins gluetun's namespace.** Rejected: leaving it
+    on the compose network with host-forwarded DNS. On 2026-10-03 a download
+    failed on the stable stack because the container's resolver, which
+    follows the host's VPN-driven DNS, could not resolve a details page for
+    about four minutes after startup; pinning public resolvers was tried
+    earlier and broke under a host VPN that blocks plain UDP/53. Inside the
+    namespace the downloader resolves through gluetun's DNS-over-TLS
+    forwarder and scrapes torrent-site pages through the tunnel instead of
+    from the home IP. Verified: health, TMDB, plugin search and qBittorrent
+    on `127.0.0.1` all work there; only the save-path join (decision 10)
+    stood in the way. Cost: the downloader's port must avoid gluetun's 8000
+    and the orchestrator addresses it through `gluetun`.
+12. **Admin password is set once through the API and written to a
+    gitignored file for the operator.** Rejected: leaving linuxserver's
+    per-boot temporary password. The operator will open the WebUI
+    occasionally and should not have to read a container log for it. The
+    hash format only matters when seeding the conf, which we do not do for
+    the password.
+13. **Search plugin list is a workspace setting, `QBT_SEARCH_PLUGINS`, with
+    a shipped default.** Rejected: hardcoding the list in the provision
+    script. Plugins come and go; a setting keeps the change to `.env`.
 
 ## Open questions
 
-**RESOLVED - 1. VPN mechanism.** gluetun VPN-client container holding a
-WireGuard tunnel; qBittorrent routes through it (`network_mode:
-service:gluetun`). The user supplies a WireGuard config file (no password). The
-earlier apparent rejection of gluetun was a miscommunication (a garbled word in
-the assistant's message, not a real objection). Decided 2026-07-02.
+None. Former questions 1 and 2 are decisions 12 and 13.
 
-Remaining (resolve before writing tests):
-2. **Where the stop-seed delay lives.** Inside torrent-downloader (a timer after
-   completion) or driven by the orchestrator's STOP_SEEDING pipeline step (which
-   already exists but currently fires on the webhook)? The webhook path is
-   event-driven and restart-safe; an in-process timer is simpler but lost on
-   restart.
-3. **Gateway-level VPN refusal.** Does the orchestrator refuse a download at the
-   gateway when VPN is down (fail fast, clearest UX), or only torrent-downloader
-   refuse (single enforcement point, less duplication)? Defense-in-depth argues
-   for both; DRY argues for one.
-4. **Dry-run default in dev.** Is `dry_run` forced by a dev config flag the
-   gateway/bot honor, or a compose env default the services read? Where does the
-   "this environment is dev" signal live?
-5. **VPN provider verification depth.** Is checking the interface is *bound*
-   enough, or should the app also verify the tunnel is *up* (e.g. an external IP
-   check confirming it differs from the ISP IP)? IP-leak-test-on-startup is the
-   strongest but adds an external call and a failure mode.
+## Test plan
 
-## Sequencing (once open Qs resolved)
+- **torrent-downloader**: config test that `VPN_INTERFACES` defaults to
+  `tun0`; the save-path builder produces `/media/_incoming/Movies` from
+  `MEDIA_MOUNT_PATH` and the contracts constants; existing `is_vpn_bound()`
+  tests unchanged.
+- **medialab-orchestrator**: aggregated `/health` includes
+  `vpn_interface_bound`, false when the downloader is unreachable.
+- **medialab-web, medialab-bot**: render the flag (unit test on the
+  presenter).
+- **workspace** (bash tests like `bin/medialab-drift.sh`): `medialab_services`
+  excludes services without `build`; provision script is a no-op with exit 0
+  on a second run; compose `config` validates with the example env files.
+- **Live** (decision 0001): rerun the lab scripts against the real stack
+  before release: kill-switch, API from the downloader container, hook
+  delivery, one real download reaching DONE.
 
-Likely: torrent-downloader (configurable VPN interface + stop-seed delay +
-health) first, since it owns enforcement; then compose (qBittorrent + VPN
-binding + overlays); then orchestrator + bot surfacing; the setup wizard (item
-8) folds the VPN/keys collection in. Each its own repo PR + release.
+## Rollout
 
-## Explicitly out of scope
-
-- Bundling or reselling a VPN. BYO only.
-- Owning Jellyfin's lifecycle / GPU transcoding config. External dependency.
-- Multi-host / multi-user. Single-user Windows host.
+1. workspace: `bin/lib.sh` split and tests (no behaviour change for the
+   current stack).
+2. torrent-downloader: `MEDIA_MOUNT_PATH` with `/` join, `tun0` default,
+   `API_PORT` and `QB_HOST` examples, docs. Release.
+3. medialab-orchestrator: health flag, downloader URL example, deprecation
+   note. Release.
+4. medialab-web, medialab-bot: show the flag. Release.
+5. workspace: compose services, provision script, docs, `docs/secrets.md`.
+   Manual host steps: stop host qBittorrent, run the provision script, run
+   the live checks, remove the host autorun hook and the `.bat`.
+6. Close out: `docs/decisions/0001` follow-up note; a new decision note,
+   "the network is the kill-switch, the app check is the message".

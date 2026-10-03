@@ -1,0 +1,24 @@
+# Overlay: the real torrent-downloader image inside gluetun's namespace.
+# Reaches qBittorrent on 127.0.0.1 (shared namespace) and the internet, TMDB
+# and torrent-site details pages included, only through the tunnel. Its DNS is
+# gluetun's DNS-over-TLS forwarder, so host resolver state is irrelevant.
+# API_PORT must differ from 8000 (gluetun control server, same namespace).
+#   docker compose -f compose.yml -f compose.downloader.yml up -d
+services:
+  gluetun:
+    ports:
+      - "127.0.0.1:8091:8001"
+  downloader:
+    image: medialab/torrent-downloader:1.20.0
+    network_mode: "service:gluetun"
+    env_file:
+      - ./secrets/downloader.env
+    volumes:
+      - lab-downloader-cache:/app/.cache
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  lab-downloader-cache:
