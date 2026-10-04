@@ -1,6 +1,6 @@
 # Spec: dismiss jobs that need attention
 
-Status: Approved
+Status: Shipped
 Issue: MickMarch/medialab#121
 
 ## Problem
