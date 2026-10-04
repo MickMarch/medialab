@@ -1,6 +1,6 @@
 # Spec: dismiss jobs that need attention
 
-Status: Draft
+Status: Approved
 Issue: MickMarch/medialab#121
 
 ## Problem
@@ -177,15 +177,17 @@ Unchanged. `needs_attention` already excludes dismissed jobs.
    delete's. Dismiss touches no files and is reversible in effect: the job
    can still be deleted, and the title can be searched again.
 
+8. **No secondary Retry on a `TORRENT_GONE` row.** Rejected: keeping
+   Retry for the case where the user re-adds the torrent by hand. The
+   health poll's completed-but-unnoticed rule already picks up a re-added
+   torrent on its next tick, so Retry would duplicate the poll.
+9. **`DISMISSED` is not re-openable.** Rejected: a reverse transition to
+   `NEEDS_ATTENTION`. Redo or a fresh download covers every real case; a
+   reverse edge adds a state nobody asked for.
+
 ## Open questions
 
-1. Should Retry remain available on a `TORRENT_GONE` row as a secondary
-   action, for the case where the user re-adds the torrent to qBittorrent
-   by hand? Proposal: no; the health poll's completed-but-unnoticed rule
-   already picks up a re-added torrent on the next tick.
-2. Should a `DISMISSED` job be re-openable (back to `NEEDS_ATTENTION`)?
-   Proposal: no; Redo or a fresh download covers every real case, and a
-   reverse transition adds a state nobody asked for.
+None. Approved 2026-10-03 with decisions 8 and 9.
 
 ## Test plan
 
