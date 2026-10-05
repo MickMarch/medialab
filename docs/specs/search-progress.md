@@ -1,6 +1,6 @@
 # Spec: real torrent search progress in the web UI
 
-Status: Draft
+Status: Approved
 Issue: MickMarch/medialab#80
 
 ## Problem
