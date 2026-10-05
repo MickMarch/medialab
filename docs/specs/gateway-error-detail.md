@@ -1,6 +1,6 @@
 # Spec: gateway error code and detail in the web and bot
 
-Status: Draft
+Status: Approved
 Issue: MickMarch/medialab#124
 
 ## Problem
