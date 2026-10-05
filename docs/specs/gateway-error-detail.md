@@ -1,6 +1,6 @@
 # Spec: gateway error code and detail in the web and bot
 
-Status: Approved
+Status: Shipped
 Issue: MickMarch/medialab#124
 
 ## Problem
