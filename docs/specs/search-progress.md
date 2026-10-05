@@ -1,6 +1,6 @@
 # Spec: real torrent search progress in the web UI
 
-Status: Approved
+Status: Shipped
 Issue: MickMarch/medialab#80
 
 ## Problem
@@ -83,10 +83,12 @@ doing" without any id round trip.
   so it polls only while the bar is shown. The CSS timer animation stays on
   the fill as the fallback: a polled response sets an inline width that
   overrides it; if polling fails the animation keeps running.
-- The bar needs the search parameters at render time. Every place that
-  includes `partials/searching.html` already has them in scope (the scope
-  form, the title card, the show and jobs pages pass them to the torrents
-  request); the include takes them explicitly.
+- A page-level bar serves many buttons (the show page, the jobs table's
+  Redo, the watchlist), so it cannot know the search parameters at render
+  time. A short inline listener in `base.html` on `htmx:configRequest`
+  copies the parameters of a torrents or redo request onto every polling
+  block's `hx-vals`; htmx reads `hx-vals` at each poll. No build step, no
+  separate script file.
 
 | Service | Change |
 |---|---|
@@ -117,6 +119,10 @@ doing" without any id round trip.
 5. `in_flight_fraction` from elapsed over timeout. Within one pattern there is
    no better signal than time; blending it with the done count keeps the bar
    moving without claiming more than is known.
+6. The bar learns its parameters from the request that starts the search,
+   through an inline `htmx:configRequest` listener. Rejected: passing them
+   into every include, because the page-level bar is one element shared by
+   every search button on the page and only the clicked button knows them.
 
 ## Open questions
 
