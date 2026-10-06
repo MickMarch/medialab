@@ -1,6 +1,6 @@
 # Spec: medialab-setup, the install and update CLI
 
-Status: Draft
+Status: Approved
 Issue: MickMarch/medialab#23 (setup), MickMarch/medialab#129 (update)
 
 Allowed statuses: Draft, Approved, Shipped, Superseded. No implementation code
@@ -230,18 +230,20 @@ step; the tool's Host phase links each row to its section.
    backup directory; splitting them would duplicate the half of each that
    matters.
 
+10. **`update` stays strictly at pins.** Rejected pulling a submodule past
+    its pin as a convenience: moving a pin is what `medialab-release.sh` is
+    for, and an unpinned service would make the running stack unreproducible.
+11. **`setup` runs the first `compose up` itself.** Rejected stopping after
+    `.env` generation: "one command to green" is the point; `--dry-run` shows
+    the plan for anyone who wants to look first.
+12. **Jellyfin library roots are registered by the tool, once.** Rejected
+    registration in the medialab-jellyfin worker's startup: it would re-run on
+    every container restart, against decision `0005-register-once`.
+
 ## Open questions
 
-1. Should `update` also offer to `git pull` a service submodule past its pin
-   (a developer convenience), or stay strictly at pins? Proposal: strictly at
-   pins; moving a pin is what `medialab-release.sh` is for.
-2. Should the tool run the first `compose up` itself (phase 5) or stop after
-   `.env` generation and print the command? Proposal: run it; the README's
-   "one command to green" is the point, and `--dry-run` shows the plan.
-3. Does the Jellyfin library registration belong here or should the
-   medialab-jellyfin worker register its roots on its own startup? Proposal:
-   here, once, per decision `0005-register-once`; startup registration would
-   re-run on every container restart.
+None. Items 1 to 3 of the draft were accepted as proposed and recorded as
+decisions 10 to 12.
 
 ## Test plan
 
