@@ -16,3 +16,6 @@
 [submodule "medialab-web"]
 	path = medialab-web
 	url = https://github.com/MickMarch/medialab-web.git
+[submodule "medialab-setup"]
+	path = medialab-setup
+	url = https://github.com/MickMarch/medialab-setup.git

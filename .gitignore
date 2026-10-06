@@ -45,5 +45,8 @@ Thumbs.db
 # Node (for any JS tooling at root)
 node_modules/
 
+# medialab-setup state: replayable non-secret answers and pre-write .env backups.
+.medialab-setup/
+
 # Written by the medialab-doctor-after-logon scheduled task; transient.
 .doctor-boot.log
