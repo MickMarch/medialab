@@ -36,8 +36,9 @@ existing doctor and both can be run with `--dry-run` to print the plan.
 **Non-goals.** A graphical installer, an MSI, or a Windows service. Linux or
 macOS hosts (the host-level steps are Task Scheduler and Windows Firewall; a
 Linux path is a later spec). Publishing images to a registry (images build from
-source, as today). Installing Docker Desktop, Jellyfin, Git, Python or `uv`
-themselves; the tool checks for them and tells the operator what to install.
+source, as today). Installing anything `winget` cannot: the tool runs
+`winget` for Git, `uv`, Docker Desktop and Jellyfin and otherwise opens the
+download page.
 Collecting any VPN account password or storing a credential anywhere other than
 the `.env` it belongs in. Replacing `bin/medialab-doctor.sh`,
 `bin/medialab-qbt-provision.sh` or `bin/medialab-release.sh`; the CLI drives
@@ -91,13 +92,19 @@ Phases run in order; each is a function that reports a table row per check or
 action and raises on failure, so a failing phase stops the run with every
 earlier phase's effect intact and visible.
 
-1. **Preflight.** Read-only. Git with submodules initialised, Docker engine
-   reachable, Docker Desktop version, `uv` present, free space on the media
+1. **Preflight.** Checks first, installs second. Git with submodules
+   initialised, `uv`, Docker Desktop, Jellyfin, free space on the media
    drive, the published ports (`8081`, `8000`, `QBT_WEBUI_PORT`, `8096`) not
-   held by a foreign process, Jellyfin answering on the host, and a warning
-   when a host qBittorrent is installed (two clients would fight over the
-   staging folders). Fails with the install instruction for whatever is
-   missing. Nothing is written.
+   held by a foreign process, and a warning when a host qBittorrent is
+   installed (two clients would fight over the staging folders). For each
+   missing prerequisite with an unattended `winget` package (Git, `uv`,
+   Docker Desktop, Jellyfin Server) the tool shows the exact `winget install`
+   line and runs it on confirmation, once per item; where `winget` is absent
+   or the package fails it opens the vendor download page in the browser and
+   waits for the operator to finish. Docker Desktop and Jellyfin may need a
+   logout or reboot after install; the tool says so and resumes from Preflight
+   when re-run, since every earlier result is re-derived, not stored.
+
 2. **Collect.** Build `Answers` from existing `.env` files, then the answers
    file, then prompts, in that precedence. Live-validates each asked
    credential where a cheap read-only call exists: TMDB `GET /configuration`,
@@ -222,9 +229,14 @@ step; the tool's Host phase links each row to its section.
 7. **Live-validate credentials with read-only calls.** A wrong TMDB key found
    at prompt time costs one re-prompt; found after `compose up` it costs a log
    dive. Validation is skipped offline with a warning, never fatal.
-8. **Prerequisites are checked, not installed.** Rejected `winget install`
-   for Docker Desktop and Jellyfin: both carry licence prompts and reboots the
-   tool cannot own, and Jellyfin's data directory choice is the operator's.
+8. **Prerequisites are installed through `winget` on confirmation, with the
+   download page as the fallback.** Revised from "checked, not installed":
+   the operator asked for the fewest manual downloads. `winget` runs the
+   vendor installers unattended and is present on every supported Windows 10
+   build; licence acceptance is passed on the command line and shown first.
+   Jellyfin keeps the installer's default data directory, which is the one
+   `docs/host-setup.md` already assumes. A reboot the installer needs is
+   reported, never forced.
 9. **One tool, two commands, one spec.** `setup` and `update` share preflight,
    the `.env` renderer, the build and compose steps, the doctor, and the
    backup directory; splitting them would duplicate the half of each that
