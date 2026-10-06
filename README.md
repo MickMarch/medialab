@@ -70,6 +70,35 @@ and none of them can leave without it. Jellyfin stays a host app reached over
 `host.docker.internal`. Published ports: the orchestrator and the qBittorrent
 WebUI on loopback, the web UI on 8081.
 
+Clone with submodules and run the installer. It checks and, with your
+consent, installs the prerequisites (Git, uv, Docker Desktop, Jellyfin
+Server), asks for each credential with the console URL to get it from,
+generates every inter-service key once, writes every `.env`, builds, provisions
+qBittorrent, starts the stack, registers the Jellyfin libraries, offers the
+host autostart steps, and ends with the doctor:
+
+```bash
+git clone --recurse-submodules https://github.com/MickMarch/medialab.git
+cd medialab
+bin/medialab-setup.sh setup
+```
+
+`bin/medialab-setup.sh plan` shows what `setup` would write without writing
+it; `--custom` asks every tunable instead of only the required values. To move
+a running stack to the current pins, rebuild, verify, and roll back on
+failure:
+
+```bash
+bin/medialab-setup.sh update
+```
+
+Design: [docs/specs/setup-and-update-cli.md](docs/specs/setup-and-update-cli.md).
+Tool docs: [medialab-setup/README.md](medialab-setup/README.md).
+
+### By hand
+
+The same steps without the tool, so the procedure never lives only in code.
+
 `.env` files are a runtime input, not a build input; no secret is baked into an
 image.
 
