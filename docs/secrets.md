@@ -32,8 +32,8 @@ strong random string). The caller and callee must hold the same value:
 | orchestrator `TORRENT_DOWNLOADER_API_KEY` | = | torrent-downloader `API_KEY` |
 | orchestrator `MEDIALAB_JELLYFIN_API_KEY` | = | medialab-jellyfin `API_KEY` |
 
-These pairs are hand-synced today. The setup wizard
-(MickMarch/medialab#23) will generate them from one input.
+`bin/medialab-setup.sh setup` generates each pair once and writes both halves,
+so they cannot drift; edit them by hand only if you also keep both sides equal.
 
 ## VPN
 

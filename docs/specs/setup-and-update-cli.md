@@ -1,6 +1,6 @@
 # Spec: medialab-setup, the install and update CLI
 
-Status: Approved
+Status: Shipped
 Issue: MickMarch/medialab#23 (setup), MickMarch/medialab#129 (update)
 
 Allowed statuses: Draft, Approved, Shipped, Superseded. No implementation code
@@ -308,3 +308,20 @@ tool and forwards arguments and exit code.
    deliberately broken `.env` to exercise rollback.
 4. A `docs/decisions/` note if the work teaches one; the candidate is
    "the template is the schema" (decision 2) if it holds up.
+
+## Result
+
+Shipped as the `medialab-setup` submodule with `plan`, `setup` and `update`.
+Two refinements found during implementation, neither changing a decision:
+
+- Decision 12 (library roots registered by the tool): registration goes to
+  Jellyfin on the host directly with the operator's key, not through the
+  medialab-jellyfin worker. The worker publishes no port, and its
+  `/library/paths` only appends a path to a library that already exists; a
+  fresh server has none, so the tool must create the library.
+- Host checks must work without elevation. `Get-ScheduledTask` and
+  `Get-NetFirewallRule` return nothing for a standard user on this host; the
+  SYSTEM task is probed through its task file (access denied means present)
+  and the firewall rule through `netsh`'s exit code.
+
+Lesson recorded: `docs/decisions/0010-the-template-is-the-schema.md`.
