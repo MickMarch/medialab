@@ -54,6 +54,7 @@ external workers) is the documented answer at 100x load, not the MVP.
 | [torrent-downloader](torrent-downloader) | qBittorrent + TMDB worker | no | [README](torrent-downloader/README.md) |
 | [medialab-jellyfin](medialab-jellyfin) | Jellyfin library worker | no | [README](medialab-jellyfin/README.md) |
 | [medialab-contracts](medialab-contracts) | Shared Pydantic models + constants | n/a | [README](medialab-contracts/README.md) |
+| [medialab-setup](medialab-setup) | Install and update CLI, run on the host | to the operator | [README](medialab-setup/README.md) |
 
 Each is an independent git repo pinned here as a submodule. The root repo
 tracks workspace docs, the compose file, `bin/`, and the shared GitHub
@@ -152,6 +153,7 @@ version as the `APP_VERSION` build arg, which each Dockerfile bakes in as the
 | `bin/medialab-drift.sh` | fail if shared tooling config differs between repos |
 | `bin/medialab-doctor.sh` | is the stack up: engine, containers, qBittorrent WebUI, Jellyfin, gateway health with the VPN bound, bot login |
 | `bin/medialab-qbt-provision.sh` | seed the qBittorrent API key, bind to the tunnel, install the hook and search plugins; idempotent |
+| `bin/medialab-setup.sh` | run the install and update CLI ([spec](docs/specs/setup-and-update-cli.md)); `setup` and `update` land with their issues |
 
 Service names, image names and `*_VERSION` variables are derived from
 `docker-compose.yml` by `bin/lib.sh`. Adding a service means adding it to the
