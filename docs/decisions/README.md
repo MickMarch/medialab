@@ -17,3 +17,4 @@ explain to the next reader.
 | 0008 | [A display name is not a path](0008-display-name-is-not-the-path.md) |
 | 0009 | [The network is the kill-switch; the app check is the message](0009-network-is-the-kill-switch.md) |
 | 0010 | [The template is the schema](0010-the-template-is-the-schema.md) |
+| 0011 | [The compose project name is the stack, not the directory](0011-compose-project-name-is-the-stack.md) |
