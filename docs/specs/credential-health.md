@@ -1,6 +1,6 @@
 # Spec: credential health
 
-Status: Draft
+Status: Approved
 Issue: MickMarch/medialab#136
 
 Allowed statuses: Draft, Approved, Shipped, Superseded. No implementation code
@@ -162,12 +162,21 @@ are reused as functions, not as the full chain.
 9. **VPN key excluded.** Its failure is already loud and already named by the
    doctor and the gateway; a second signal for it would be redundant.
 
+10. **Probe every six hours by default, as a bounded runtime setting.** One
+    read-only call per credential per interval is negligible for every
+    service involved; the setting lets an operator tighten it. Rejected a
+    fixed constant: the runtime settings registry exists for exactly this.
+11. **One toast per credential per day.** A standing problem is announced,
+    not nagged; the web banner and Discord message remain visible meanwhile.
+    Rejected per-run toasts: thirty-minute reminders train the operator to
+    dismiss them.
+12. **No banner on the web login page.** The banner needs the gateway call,
+    which needs a session; the login page stays static.
+
 ## Open questions
 
-1. Probe interval default: six hours proposed; a runtime setting either way.
-2. Toast dedupe window: once per day per credential proposed.
-3. Should the web banner show on the login page too (before auth)? Proposal:
-   no; the banner needs the gateway call, which needs a session.
+None. The draft's three questions were accepted as proposed and recorded as
+decisions 10 to 12.
 
 ## Test plan
 
