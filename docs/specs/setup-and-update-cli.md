@@ -324,4 +324,26 @@ Two refinements found during implementation, neither changing a decision:
   SYSTEM task is probed through its task file (access denied means present)
   and the firewall rule through `netsh`'s exit code.
 
-Lesson recorded: `docs/decisions/0010-the-template-is-the-schema.md`.
+- The first live acceptance run exposed that `docker-compose.yml` names the
+  project, so a scratch clone ran as the live project. The tool now refuses
+  compose when `docker compose ls` shows the project owned by another
+  directory, and the acceptance recipe below sets `COMPOSE_PROJECT_NAME`.
+
+### Acceptance recipe
+
+On a host with a live stack: stop live, run the scratch clone as its own
+project, tear it down, restart live.
+
+```bash
+cd <live clone> && docker compose down
+cd <scratch clone> && COMPOSE_PROJECT_NAME=medialab-scratch bin/medialab-setup.sh setup --express --workspace "$PWD"
+cd <scratch clone> && COMPOSE_PROJECT_NAME=medialab-scratch docker compose down
+cd <live clone> && docker compose --env-file .env --env-file .versions.env up -d && bin/medialab-doctor.sh
+```
+
+Use the live media root so Jellyfin sees paths it already has and creates
+nothing. The scratch project gets its own named volumes and qBittorrent
+config; the live ones are never opened.
+
+Lessons recorded: `docs/decisions/0010-the-template-is-the-schema.md`,
+`docs/decisions/0011-compose-project-name-is-the-stack.md`.
