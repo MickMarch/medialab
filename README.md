@@ -70,15 +70,20 @@ and none of them can leave without it. Jellyfin stays a host app reached over
 `host.docker.internal`. Published ports: the orchestrator and the qBittorrent
 WebUI on loopback, the web UI on 8081.
 
-Clone with submodules and run the installer. It checks and, with your
-consent, installs the prerequisites (Git, uv, Docker Desktop, Jellyfin
-Server), asks for each credential with the console URL to get it from,
-generates every inter-service key once, writes every `.env`, builds, provisions
-qBittorrent, starts the stack, registers the Jellyfin libraries, offers the
-host autostart steps, and ends with the doctor:
+Clone with submodules, then double-click `setup.cmd`. It installs `uv` if
+needed and opens the installer in your browser: a prerequisites page that
+installs what is missing (Git, Docker Desktop, Jellyfin Server) with your
+consent, one page with a field for every credential and a `?` beside each
+explaining where to get it, then build, qBittorrent provisioning, start,
+Jellyfin library registration and the doctor, streamed to the page.
 
 ```bash
 git clone --recurse-submodules https://github.com/MickMarch/medialab.git
+```
+
+The same install from a terminal:
+
+```bash
 cd medialab
 bin/medialab-setup.sh setup
 ```
@@ -92,7 +97,8 @@ failure:
 bin/medialab-setup.sh update
 ```
 
-Design: [docs/specs/setup-and-update-cli.md](docs/specs/setup-and-update-cli.md).
+Design: [docs/specs/setup-and-update-cli.md](docs/specs/setup-and-update-cli.md)
+and [docs/specs/install-wizard.md](docs/specs/install-wizard.md).
 Tool docs: [medialab-setup/README.md](medialab-setup/README.md).
 
 ### By hand
