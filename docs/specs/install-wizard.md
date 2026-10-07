@@ -1,6 +1,6 @@
 # Spec: graphical install wizard over medialab-setup
 
-Status: Approved
+Status: Shipped
 Issue: MickMarch/medialab#135
 
 Allowed statuses: Draft, Approved, Shipped, Superseded. No implementation code
@@ -180,3 +180,12 @@ checker, no network:
 3. Acceptance on the host with the recipe in
    `docs/specs/setup-and-update-cli.md` (scratch clone, own compose project,
    live media root), driven through the browser instead of the terminal.
+
+## Result
+
+Shipped as the `wizard` command in `medialab-setup` and `setup.cmd` at the
+workspace root. Smoke-checked on the host: prerequisites and credentials
+pages render with live values, the help popover shows steps, shape and the
+console link. Decisions 3 and 8 were revised during review so the result
+page covers the host autostart steps as Next steps. Browser acceptance with
+the scratch-clone recipe is pending the next convenient downtime window.
