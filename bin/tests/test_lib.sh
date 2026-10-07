@@ -42,6 +42,9 @@ check "medialab_image_ref keeps the tag" \
 check "medialab_version_var upper-cases and underscores the service name" \
   "MEDIALAB_BUILT_VERSION" "$(medialab_version_var medialab-built)"
 
+# setup.cmd is the double-click entry point; it must run the wizard command.
+check "setup.cmd runs the wizard"   "1" "$(grep -c 'medialab-setup wizard' "${HERE}/../../setup.cmd")"
+
 if [[ "${failures}" -eq 0 ]]; then
   echo "lib.sh: all checks passed"
 else
