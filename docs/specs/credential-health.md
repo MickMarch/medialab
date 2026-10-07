@@ -1,6 +1,6 @@
 # Spec: credential health
 
-Status: Approved
+Status: Shipped
 Issue: MickMarch/medialab#136
 
 Allowed statuses: Draft, Approved, Shipped, Superseded. No implementation code
@@ -216,3 +216,24 @@ decisions 10 to 12.
 8. Acceptance on the host: revoke the TMDB key in the console, see the
    banner, the Discord message and the toast within the probe interval or
    on the next search; click through to the fix; confirm `ok` returns.
+
+## Result
+
+Shipped across seven releases in the rollout order: contracts (models and
+names), torrent-downloader and medialab-jellyfin (owner checks, probe,
+`credentials` on health), medialab-orchestrator (aggregation, bot report
+endpoint, transition notices with a JSON ledger), medialab-bot (login
+report), medialab-web (banner and card rows), medialab-setup
+(`check-credentials`, the host task, `wizard --fix`), then `setup.cmd --fix`
+at the root. Two notes from implementation:
+
+- The Jellyfin worker has no runtime settings registry, so its probe interval
+  is env-only (`CREDENTIAL_CHECK_INTERVAL_SECONDS`); the downloader exposes
+  it as a runtime setting as well.
+- The toast button opens a generated `fix-<name>.cmd` in the state dir
+  rather than passing arguments: WinRT toast actions launch a file or URI,
+  not a command line.
+
+Acceptance (revoke the TMDB key, see banner, Discord notice and toast, fix
+through the wizard) is pending the next deploy of the stack, which is also
+the first live `update` run.

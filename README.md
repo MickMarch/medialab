@@ -99,6 +99,11 @@ bin/medialab-setup.sh update
 
 Design: [docs/specs/setup-and-update-cli.md](docs/specs/setup-and-update-cli.md)
 and [docs/specs/install-wizard.md](docs/specs/install-wizard.md).
+
+When a credential expires, the stack says so: a banner in the web UI, one
+Discord message, and a Windows notification whose button opens the installer
+on that one field (`setup.cmd --fix <name>`). Design:
+[docs/specs/credential-health.md](docs/specs/credential-health.md).
 Tool docs: [medialab-setup/README.md](medialab-setup/README.md).
 
 ### By hand
