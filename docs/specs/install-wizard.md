@@ -26,8 +26,8 @@ existing phases in `medialab-setup`; it adds no second implementation of any
 rule. An advanced toggle on the credentials page reveals the optional values
 and template tunables that `setup --custom` asks.
 
-**Non-goals.** `update` and the host autostart steps stay CLI-only in this
-release (follow-up items on the board). A packaged executable (no Git, no
+**Non-goals.** `update` stays CLI-only in this release (a follow-up item on
+the board). A packaged executable (no Git, no
 Python) is its own issue. A native window frame; the page runs in the default
 browser. Anything that needs the stack running: the wizard runs before the
 containers exist, so it cannot live in medialab-web.
@@ -53,7 +53,7 @@ process cannot drive it.
 | Prerequisites | the preflight table live, with an Install button per missing item that runs the winget install and re-probes | `Preflight`; installs reuse `_install` with the page as the prompter |
 | Credentials | one field per asked value; required ones marked; an info control per field; an Advanced toggle revealing optional values and the unbound template keys with their template comments as help | `ASKED_FIELDS`, `REQUIRED_FIELDS`, `GUIDES`, the `.env.example` templates |
 | Run | a plan table (files to create or update), then streamed output of build, provision and the Jellyfin step | `render_all`, `files_table`, `run_build`, `run_provision` |
-| Result | the doctor table, green or not, with the retry window shown as a countdown; a link to the web UI when green | `wait_for_doctor` |
+| Result | the doctor table, green or not; a link to the web UI when green; then **Next steps**: every host autostart step with its state, an Apply button for the automatable ones (one UAC prompt), and instructions with a link for the two manual ones | `wait_for_doctor`, `HostPhase.status`, `HostPhase.run` |
 
 The credentials page is the one the issue asks for. Each field has:
 
@@ -110,8 +110,14 @@ when idle, so nothing listens after setup.
    requirement; it still needs Git to clone. A packaged executable removes
    Git too but brings a build pipeline, signing and antivirus questions, so
    it is a separate issue.
-3. **Install only in this release.** Prerequisites, credentials, run, result.
-   `update` and host steps are CLI-only until their own pages are specified.
+3. **Install plus host steps in this release; `update` stays CLI.** The
+   operator asked that every setup step be either done by the installer or
+   explained as a next step. The result page therefore lists each host step
+   (Jellyfin at boot, tray autostart off, lock at logon, automatic logon,
+   Docker Desktop autostart, doctor after logon, LAN firewall rule) with its
+   state, applies the automatable ones on one click through the same
+   elevated batch the CLI uses, and explains the two that need the operator.
+   Revised from "install only" during review.
 4. **One credentials page, advanced toggle.** Required values are few enough
    to fit one screen; optional values and tunables hide behind a toggle rather
    than extra steps, matching express and custom in the CLI.
@@ -127,10 +133,10 @@ when idle, so nothing listens after setup.
    the doctor and open the web UI, short enough that nothing listens on the
    host for long. Rejected no timeout: a forgotten server is a listening
    process with the run token in memory.
-8. **No host-steps toggle on the Run page.** Host steps are out of scope for
-   this release; the result page links to `docs/host-setup.md` and names the
-   CLI command that applies them. Rejected a disabled toggle: a control that
-   does nothing invites a bug report.
+8. **Host steps live on the result page, not the Run page.** They need the
+   stack up first (the doctor task points at a working clone) and they are
+   the natural "what now" after a green doctor. Superseded the earlier
+   "no host-steps toggle" wording when decision 3 was revised.
 9. **Docker Desktop sign-out handled with a message, as the CLI does.** The
    prerequisites page installs it, says a sign-out is needed, and tells the
    operator to reopen `setup.cmd` afterwards; preflight is re-derived on the
