@@ -1,6 +1,6 @@
 # Spec: graphical install wizard over medialab-setup
 
-Status: Draft
+Status: Approved
 Issue: MickMarch/medialab#135
 
 Allowed statuses: Draft, Approved, Shipped, Superseded. No implementation code
@@ -123,15 +123,24 @@ when idle, so nothing listens after setup.
    submit: the operator should learn a bad key while the console tab is still
    open.
 
+7. **Idle timeout of ten minutes after the result page.** Long enough to read
+   the doctor and open the web UI, short enough that nothing listens on the
+   host for long. Rejected no timeout: a forgotten server is a listening
+   process with the run token in memory.
+8. **No host-steps toggle on the Run page.** Host steps are out of scope for
+   this release; the result page links to `docs/host-setup.md` and names the
+   CLI command that applies them. Rejected a disabled toggle: a control that
+   does nothing invites a bug report.
+9. **Docker Desktop sign-out handled with a message, as the CLI does.** The
+   prerequisites page installs it, says a sign-out is needed, and tells the
+   operator to reopen `setup.cmd` afterwards; preflight is re-derived on the
+   next run. Rejected forcing a sign-out from the page: the installer must
+   never end the operator's session.
+
 ## Open questions
 
-1. Idle timeout for the server after the result page: proposal 10 minutes.
-2. Should the Run page offer a "skip host steps" toggle even though host steps
-   are not in scope? Proposal: no; host steps are simply not run and the
-   result page links to `docs/host-setup.md`.
-3. Prerequisite installs that need a sign-out (Docker Desktop): the page can
-   only say so and stop; proposal: a "Reopen setup.cmd after signing back in"
-   message, same as the CLI.
+None. The draft's three questions were accepted as proposed and recorded as
+decisions 7 to 9.
 
 ## Test plan
 
