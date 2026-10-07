@@ -23,6 +23,6 @@ if not exist "medialab-setup\pyproject.toml" (
     exit /b 1
 )
 
-uv run --project medialab-setup medialab-setup wizard --workspace "%~dp0."
+uv run --project medialab-setup medialab-setup wizard --workspace "%~dp0." %*
 if errorlevel 1 pause
 endlocal
