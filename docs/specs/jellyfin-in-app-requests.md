@@ -62,8 +62,9 @@ Discover Shows/<Title> (<Year>) [tmdbid-<id>]/
     Season 01/S01E01.strm
 ```
 
-The `.strm` points at a short bundled clip served by medialab-jellyfin that
-says "Tap the heart to request". Jellyfin will not create an item without a
+The `.strm` holds the host path of a short clip, `DISCOVER_DIR/_clip/`,
+outside both library roots, that says "Tap the heart to request".
+medialab-jellyfin writes the clip once from a bundled asset. Jellyfin will not create an item without a
 playable entry; the clip turns an accidental play into an instruction.
 
 The orchestrator reconciles on a schedule (`discover_refresh_minutes`):
@@ -81,7 +82,7 @@ Two paths, per decision 0003 (webhook fast path, poll safety net):
    header. Events for items outside the Discover libraries, or where
    `IsFavorite` is false, are ignored.
 2. **Poll.** Every `discover_poll_seconds`, medialab-jellyfin lists
-   `GET /Users/{id}/Items?IsFavorite=true&ParentId=<discover>` for each
+   `GET /Users/{id}/Items?Filters=IsFavorite&ParentId=<discover>` for each
    allowed user. New favorites become requests. Works with no plugin at all.
 
 A favorite is a request once. The orchestrator stores `(media_type, tmdb_id)`
@@ -185,11 +186,19 @@ the orchestrator. Added to `.env.example` and `docs/secrets.md`.
     spec; this feature is its only consumer and the change is one scope
     parameter on an existing route.
 
+11. **Placeholders render and favorite in native clients (spike).** Two
+    folders (one movie, one show, `.nfo` + `.strm` to a local clip) in two
+    new libraries outside the media root. Jellyfin matched both by TMDB id,
+    fetched posters and logos, kept the `.nfo` title with its state suffix
+    over the TMDB title, and created the stub episode with real episode
+    metadata. A heart tapped in a client appeared in
+    `GET /Users/{id}/Items?Filters=IsFavorite`. A `.strm` holding a local
+    host path plays, so the clip can be a file under `DISCOVER_DIR` instead
+    of a served URL.
+
 ## Open questions
 
-1. Minimum client check: confirm Findroid, Swiftfin and Android TV all show
-   the heart on Discover items and the `.nfo` title suffix after a refresh.
-   A spike before Approved.
+None.
 
 ## Test plan
 
