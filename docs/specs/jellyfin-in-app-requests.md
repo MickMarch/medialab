@@ -53,19 +53,18 @@ naming rules plus the TMDB id tag so Jellyfin matches metadata by id:
 
 ```
 Discover Movies/<Title> (<Year>) [tmdbid-<id>]/
-    movie.nfo          title, plot, tmdb id, state suffix
-    poster.jpg         from the TMDB image CDN, written once
-    <Title>.strm       points at the placeholder clip
+    movie.nfo          title, tmdb id, state suffix
+    <Title> (<Year>).mp4   copy of the placeholder clip
 Discover Shows/<Title> (<Year>) [tmdbid-<id>]/
     tvshow.nfo
-    poster.jpg
-    Season 01/S01E01.strm
+    Season 01/<Title> S01E01.mp4
 ```
 
-The `.strm` holds the host path of a short clip, `DISCOVER_DIR/_clip/`,
-outside both library roots, that says "Tap the heart to request".
-medialab-jellyfin writes the clip once from a bundled asset. Jellyfin will not create an item without a
-playable entry; the clip turns an accidental play into an instruction.
+Jellyfin fetches posters, logos and overview from TMDB by the id, so no art
+is written. Jellyfin will not create an item without a playable file; each
+placeholder carries a copy of a bundled clip (8 seconds, about 26 KB) that
+says "Not downloaded yet - tap the heart to request", which turns an
+accidental play into an instruction.
 
 The orchestrator reconciles on a schedule (`discover_refresh_minutes`):
 desired set = trending movies and shows (existing discover cache) plus
@@ -155,7 +154,7 @@ the orchestrator. Added to `.env.example` and `docs/secrets.md`.
 1. **Placeholder library, not web UI injection.** Rejected: a jellyfin-web
    request page (seerr-bridge style). It reaches the browser only, breaks on
    Jellyfin web updates, and the target users are on native clients.
-2. **Favorite means request.** Rejected: play-to-request (a `.strm` hitting a
+2. **Favorite means request.** Rejected: play-to-request (a `.strm` URL hitting a
    medialab URL). Clients prefetch and retry streams, so a play is not a
    reliable single intent, and an accidental play would download.
 3. **No C# plugin in the first version.** The official Webhook plugin plus a
@@ -187,14 +186,16 @@ the orchestrator. Added to `.env.example` and `docs/secrets.md`.
     parameter on an existing route.
 
 11. **Placeholders render and favorite in native clients (spike).** Two
-    folders (one movie, one show, `.nfo` + `.strm` to a local clip) in two
-    new libraries outside the media root. Jellyfin matched both by TMDB id,
-    fetched posters and logos, kept the `.nfo` title with its state suffix
-    over the TMDB title, and created the stub episode with real episode
-    metadata. A heart tapped in a client appeared in
-    `GET /Users/{id}/Items?Filters=IsFavorite`. A `.strm` holding a local
-    host path plays, so the clip can be a file under `DISCOVER_DIR` instead
-    of a served URL.
+    folders (one movie, one show, `.nfo` + clip) in two new libraries
+    outside the media root. Jellyfin matched both by TMDB id, fetched
+    posters and logos, kept the `.nfo` title with its state suffix over the
+    TMDB title, and created the stub episode with real episode metadata. A
+    heart tapped in a client appeared in
+    `GET /Users/{id}/Items?Filters=IsFavorite`. Rejected: a `.strm` holding
+    the clip's local host path; Jellyfin treated the `.strm` itself as the
+    media (container `strm`, no streams) and nothing played. A real file
+    copy probes and plays, and swapping the file kept the item id and the
+    favorite.
 
 ## Open questions
 
