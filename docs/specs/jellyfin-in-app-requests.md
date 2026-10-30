@@ -36,7 +36,7 @@ request always follows `new_only`; other start points stay in web).
 | Service | Owns |
 |---|---|
 | medialab-contracts | `JellyfinRequestEvent`, `PlaceholderState` enum, placeholder marker constants, the `DISCOVER_DIR` path contract entry |
-| torrent-downloader | extending the pick rule to movie and season scopes (see Pick rule) |
+| torrent-downloader | extending the pick rule to movie scope (see Pick rule) |
 | medialab-jellyfin | writing and removing placeholder folders; reading per-user favorites inside the Discover library; parsing the Jellyfin webhook payload |
 | medialab-orchestrator | which titles get placeholders; the request flow (pick, submit, watchlist link); the favorites poll; placeholder state updates; allowed-user check |
 | medialab-web | nothing new beyond a settings entry |
@@ -114,13 +114,12 @@ favorite -> REQUESTED -> picking -> SUBMITTED (job id) -> DONE: placeholder remo
 
 ### Pick rule
 
-The automatic pick (`GET /search/torrents/pick`, watchlist spec) is episode
-scope only. It gains movie scope (no season or episode) and season scope
-(season, no episode). Same rule otherwise: resolution exact match on
-`DEFAULT_FOLLOW_RESOLUTION`, `follow_minimum_seeders` floor, existing ranking.
-Season scope accepts only results that pass the existing
-`is_exact_season_pack` check; a single-episode result never satisfies a
-season request.
+The automatic pick (`GET /search/torrents/pick`, watchlist spec) already
+covers episode scope and season scope (`episode` unset picks an exact
+single-season pack via `is_exact_season_pack`). It gains movie scope:
+`media_type=movie`, no season or episode, keeping only releases that parse
+with no season or episode. Same rule otherwise: resolution bucket with
+fallback, `follow_minimum_seeders` floor, most seeders then largest file.
 
 ### State feedback
 
@@ -205,9 +204,9 @@ None.
 
 - **medialab-contracts**: `JellyfinRequestEvent` parses a real Webhook plugin
   `UserDataSaved` payload; `PlaceholderState` round-trips.
-- **torrent-downloader**: pick rule returns one result for movie scope and
-  season scope, honours the seeder floor, 404 `NO_CANDIDATE` otherwise;
-  season scope rejects single-episode results.
+- **torrent-downloader**: pick rule returns one movie release for movie
+  scope, rejects TV-named releases, honours the seeder floor and bucket
+  fallback, 404 `NO_CANDIDATE` otherwise.
 - **medialab-jellyfin**: placeholder writer creates the folder layout and
   `.nfo` with the tmdb id; remove is idempotent; state suffix rewrite; the
   favorites reader filters to the Discover parent id. Filesystem in
@@ -224,7 +223,7 @@ None.
 ## Rollout
 
 1. medialab-contracts PR (models, constants), release.
-2. torrent-downloader PR (pick scopes), release.
+2. torrent-downloader PR (pick movie scope), release.
 3. medialab-jellyfin PR (placeholder writer, favorites reader, clip), release.
 4. medialab-orchestrator PR (reconcile, request flow, webhook, poll), release.
 5. medialab-setup: create Discover libraries; `docs/host-setup.md` and
