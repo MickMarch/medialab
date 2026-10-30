@@ -1,6 +1,6 @@
 # Spec: request titles from inside Jellyfin clients
 
-Status: Draft
+Status: Approved
 Issue: MickMarch/medialab#142
 
 ## Problem
