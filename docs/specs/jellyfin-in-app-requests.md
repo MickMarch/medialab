@@ -1,0 +1,190 @@
+# Spec: request titles from inside Jellyfin clients
+
+Status: Draft
+Issue: MickMarch/medialab#142
+
+## Problem
+
+Requesting a title needs medialab-web or the Discord bot. Household members
+watch in Jellyfin (web, Findroid, Swiftfin, Android TV) and never open either.
+Jellyfin plugins can only extend jellyfin-web; native clients ignore plugin
+UI, so a "Request" page inside Jellyfin reaches the browser only.
+
+What every client does render: libraries of items with posters, and a
+favorite (heart) toggle per item. JellyBridge proves the pattern: a library of
+placeholder items where favoriting one files a request.
+
+## Goal and non-goals
+
+Goal: a **Discover** library in Jellyfin, filled with placeholder items for
+trending titles and watchlist entries that are not in the real library.
+Favoriting a placeholder in any client files a request: the orchestrator runs
+the automatic pick and submits the download with no further step. The
+placeholder shows request state in its title and disappears once the real
+item is in the library. Works with no Jellyfin plugin and no client changes.
+
+Non-goals: free-form search inside native clients (Jellyfin search covers the
+library only; search stays in web and the bot); choosing a torrent
+interactively; per-user approval queues; a C# plugin in the first version
+(see Decisions); following a show from Jellyfin (a series request is
+"download what has aired", see Open questions).
+
+## Design
+
+### Ownership
+
+| Service | Owns |
+|---|---|
+| medialab-contracts | `JellyfinRequestEvent`, `PlaceholderState` enum, placeholder marker constants |
+| torrent-downloader | extending the pick rule to movie and season scopes |
+| medialab-jellyfin | writing and removing placeholder folders; reading per-user favorites inside the Discover library; parsing the Jellyfin webhook payload |
+| medialab-orchestrator | which titles get placeholders; the request flow (pick, submit, watchlist link); the favorites poll; placeholder state updates; allowed-user check |
+| medialab-web | nothing new beyond a settings entry |
+| medialab-bot | nothing |
+
+### Placeholder library
+
+A directory `DISCOVER_DIR`, bind-mounted into medialab-jellyfin and added to
+Jellyfin as its own library ("Discover", one for movies, one for shows) with
+`POST /library/paths` at setup. One folder per title, named by the existing
+naming rules plus the TMDB id tag so Jellyfin matches metadata by id:
+
+```
+Discover Movies/<Title> (<Year>) [tmdbid-<id>]/
+    movie.nfo          title, plot, tmdb id, state suffix
+    poster.jpg         from the TMDB image CDN, written once
+    <Title>.strm       points at the placeholder clip
+Discover Shows/<Title> (<Year>) [tmdbid-<id>]/
+    tvshow.nfo
+    poster.jpg
+    Season 01/S01E01.strm
+```
+
+The `.strm` points at a short bundled clip served by medialab-jellyfin that
+says "Tap the heart to request". Jellyfin will not create an item without a
+playable entry; the clip turns an accidental play into an instruction.
+
+The orchestrator reconciles on a schedule (`discover_refresh_minutes`):
+desired set = trending movies and shows (existing discover cache) plus
+watchlist entries, minus TMDB ids already in the real library (existing
+`/library/tmdb-ids`). medialab-jellyfin adds missing folders, removes stale
+ones, then triggers one scan of the Discover libraries.
+
+### Request detection
+
+Two paths, per decision 0003 (webhook fast path, poll safety net):
+
+1. **Webhook.** The official Jellyfin Webhook plugin sends `UserDataSaved`
+   to `POST /jellyfin/events` on the orchestrator with a shared secret
+   header. Events for items outside the Discover libraries, or where
+   `IsFavorite` is false, are ignored.
+2. **Poll.** Every `discover_poll_seconds`, medialab-jellyfin lists
+   `GET /Users/{id}/Items?IsFavorite=true&ParentId=<discover>` for each
+   allowed user. New favorites become requests. Works with no plugin at all.
+
+A favorite is a request once. The orchestrator stores `(media_type, tmdb_id)`
+with the requesting Jellyfin user; repeat favorites, or the same title from a
+second user, attach to the existing request.
+
+### Request flow
+
+```
+favorite -> REQUESTED -> picking -> SUBMITTED (job id) -> DONE: placeholder removed
+                           \-> NO_CANDIDATE: saved to watchlist, title shows "Not found yet"
+```
+
+- Movie: pick route with movie scope; submit through the existing pipeline.
+- Show: pick route per aired season (season pack first, episodes as fallback
+  is out of scope for the first version, see Open questions).
+- Every request also upserts a `saved` watchlist entry, so it is visible in
+  web and the bot and survives a failed pick.
+- `NO_CANDIDATE` items are retried by the watchlist's existing schedule.
+
+### State feedback
+
+`PlaceholderState`: `available`, `requested`, `downloading`, `not_found`.
+The state is written as a title suffix in the `.nfo` (for example
+`Dune (2021) - Requested`) and the item is refreshed. Native clients show the
+title, so this is the only feedback channel that reaches all of them. The
+Discord notice already sent on submit is unchanged.
+
+### Access
+
+`jellyfin_request_users`: runtime setting listing Jellyfin user ids allowed
+to request. Empty means nobody, so installing the feature grants nothing until
+set. Favorites from other users are ignored and logged.
+
+### Host steps
+
+- Add the two Discover libraries (setup CLI, `POST /library/paths`).
+- Per user, exclude Discover from "Continue Watching" and "Latest" (Jellyfin
+  Home settings). Documented in `docs/host-setup.md`.
+- Optional: install the Jellyfin Webhook plugin and point `UserDataSaved` at
+  the orchestrator.
+
+### Secrets
+
+`JELLYFIN_WEBHOOK_SECRET`: shared header value between the Webhook plugin and
+the orchestrator. Added to `.env.example` and `docs/secrets.md`.
+
+## Decisions
+
+1. **Placeholder library, not web UI injection.** Rejected: a jellyfin-web
+   request page (seerr-bridge style). It reaches the browser only, breaks on
+   Jellyfin web updates, and the target users are on native clients.
+2. **Favorite means request.** Rejected: play-to-request (a `.strm` hitting a
+   medialab URL). Clients prefetch and retry streams, so a play is not a
+   reliable single intent, and an accidental play would download.
+3. **No C# plugin in the first version.** The official Webhook plugin plus a
+   poll covers detection. Rejected: a custom plugin hooking
+   `IUserDataManager.UserDataSaved`; it adds a .NET build, a plugin repo and
+   Jellyfin version coupling for a few seconds of latency. Revisit if the
+   placeholder files need replacing with virtual items.
+4. **Placeholders are real folders on disk.** Rejected: a Jellyfin Channel
+   plugin with virtual items. Channels need C#, and client support for
+   favoriting channel items is uneven.
+5. **Allowed users are opt-in.** Rejected: any Jellyfin user may request. A
+   Jellyfin account would silently gain the power to start torrent downloads.
+6. **Every request is also a watchlist entry.** Rejected: a separate request
+   table only. The watchlist already has the retry schedule, the UI, and the
+   removal on `DONE`.
+
+## Open questions
+
+1. Show requests: all aired seasons, the latest season only, or season 1?
+   And is a series favorite a follow (`new_only`) as well?
+2. Does `DISCOVER_DIR` need a path contract entry (decision 0001), given
+   Jellyfin on the host reads it and medialab-jellyfin in a container writes
+   it?
+3. Should unfavoriting cancel a request that has not reached the torrent
+   client yet?
+4. Pick rule extension to movie and season scope: separate spec, or part of
+   this one?
+5. Minimum client check: confirm Findroid, Swiftfin and Android TV all show
+   the heart on Discover items and the `.nfo` title suffix after a refresh.
+   A spike before Approved.
+
+## Test plan
+
+- **medialab-contracts**: `JellyfinRequestEvent` parses a real Webhook plugin
+  `UserDataSaved` payload; `PlaceholderState` round-trips.
+- **torrent-downloader**: pick rule returns one result for movie scope and
+  season scope, honours the seeder floor, 404 `NO_CANDIDATE` otherwise.
+- **medialab-jellyfin**: placeholder writer creates the folder layout and
+  `.nfo` with the tmdb id; remove is idempotent; state suffix rewrite; the
+  favorites reader filters to the Discover parent id. Filesystem in
+  `tmp_path`, Jellyfin mocked at the client class.
+- **medialab-orchestrator**: reconcile computes the desired set (trending
+  plus watchlist minus library); a favorite from an allowed user files one
+  request; a duplicate attaches; a disallowed user is ignored; webhook rejects
+  a wrong secret; `NO_CANDIDATE` lands on the watchlist; `DONE` removes the
+  placeholder; poll and webhook for the same favorite file one request.
+
+## Rollout
+
+1. medialab-contracts PR (models, constants), release.
+2. torrent-downloader PR (pick scopes), release.
+3. medialab-jellyfin PR (placeholder writer, favorites reader, clip), release.
+4. medialab-orchestrator PR (reconcile, request flow, webhook, poll), release.
+5. medialab-setup: create Discover libraries; `docs/host-setup.md` and
+   `docs/secrets.md` updated in the root repo.
