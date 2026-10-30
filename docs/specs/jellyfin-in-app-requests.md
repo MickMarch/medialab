@@ -26,8 +26,8 @@ item is in the library. Works with no Jellyfin plugin and no client changes.
 Non-goals: free-form search inside native clients (Jellyfin search covers the
 library only; search stays in web and the bot); choosing a torrent
 interactively; per-user approval queues; a C# plugin in the first version
-(see Decisions); following a show from Jellyfin (a series request is
-"download what has aired", see Open questions).
+(see Decisions); choosing a follow start point from Jellyfin (a series
+request always follows `new_only`; other start points stay in web).
 
 ## Design
 
@@ -35,8 +35,8 @@ interactively; per-user approval queues; a C# plugin in the first version
 
 | Service | Owns |
 |---|---|
-| medialab-contracts | `JellyfinRequestEvent`, `PlaceholderState` enum, placeholder marker constants |
-| torrent-downloader | extending the pick rule to movie and season scopes |
+| medialab-contracts | `JellyfinRequestEvent`, `PlaceholderState` enum, placeholder marker constants, the `DISCOVER_DIR` path contract entry |
+| torrent-downloader | extending the pick rule to movie and season scopes (see Pick rule) |
 | medialab-jellyfin | writing and removing placeholder folders; reading per-user favorites inside the Discover library; parsing the Jellyfin webhook payload |
 | medialab-orchestrator | which titles get placeholders; the request flow (pick, submit, watchlist link); the favorites poll; placeholder state updates; allowed-user check |
 | medialab-web | nothing new beyond a settings entry |
@@ -44,7 +44,9 @@ interactively; per-user approval queues; a C# plugin in the first version
 
 ### Placeholder library
 
-A directory `DISCOVER_DIR`, bind-mounted into medialab-jellyfin and added to
+A directory `DISCOVER_DIR`, declared as a path contract (decision 0001) with
+a container path and a host path like the media directories, bind-mounted
+into medialab-jellyfin and added to
 Jellyfin as its own library ("Discover", one for movies, one for shows) with
 `POST /library/paths` at setup. One folder per title, named by the existing
 naming rules plus the TMDB id tag so Jellyfin matches metadata by id:
@@ -86,6 +88,13 @@ A favorite is a request once. The orchestrator stores `(media_type, tmdb_id)`
 with the requesting Jellyfin user; repeat favorites, or the same title from a
 second user, attach to the existing request.
 
+Unfavoriting cancels a request that has not been submitted to the torrent
+client (state `REQUESTED`, `picking` or `NO_CANDIDATE`): the request and its
+watchlist entry are dropped and the placeholder returns to `available`.
+After submission an unfavorite is ignored; the download is deleted through
+web or the bot as today. A request with several users cancels only when the
+last one unfavorites.
+
 ### Request flow
 
 ```
@@ -94,11 +103,24 @@ favorite -> REQUESTED -> picking -> SUBMITTED (job id) -> DONE: placeholder remo
 ```
 
 - Movie: pick route with movie scope; submit through the existing pipeline.
-- Show: pick route per aired season (season pack first, episodes as fallback
-  is out of scope for the first version, see Open questions).
-- Every request also upserts a `saved` watchlist entry, so it is visible in
-  web and the bot and survives a failed pick.
+- Show: pick route with season scope for every aired season (specials
+  excluded), one job per season, then the show becomes a `following` watchlist
+  entry with start `new_only`, so future episodes arrive through the existing
+  follow poll. A season with no candidate is left for the watchlist retry;
+  per-episode fallback inside a season is not attempted.
+- A movie request upserts a `saved` watchlist entry, so it is visible in web
+  and the bot and survives a failed pick.
 - `NO_CANDIDATE` items are retried by the watchlist's existing schedule.
+
+### Pick rule
+
+The automatic pick (`GET /search/torrents/pick`, watchlist spec) is episode
+scope only. It gains movie scope (no season or episode) and season scope
+(season, no episode). Same rule otherwise: resolution exact match on
+`DEFAULT_FOLLOW_RESOLUTION`, `follow_minimum_seeders` floor, existing ranking.
+Season scope accepts only results that pass the existing
+`is_exact_season_pack` check; a single-episode result never satisfies a
+season request.
 
 ### State feedback
 
@@ -149,18 +171,23 @@ the orchestrator. Added to `.env.example` and `docs/secrets.md`.
    table only. The watchlist already has the retry schedule, the UI, and the
    removal on `DONE`.
 
+7. **A series request downloads every aired season and follows `new_only`.**
+   Rejected: season 1 only or the latest season only, which leave the user
+   to finish the request in web, the flow this feature exists to avoid.
+   Rejected: no follow, which makes a show request stale the next week.
+8. **`DISCOVER_DIR` is a path contract.** Rejected: nesting it under the
+   media root, which mixes placeholders into the real libraries' scan paths
+   and risks Jellyfin matching a placeholder as a real item.
+9. **Unfavorite cancels only before submission.** Rejected: never cancelling,
+   which turns a mis-tap into a download. Rejected: cancelling a running
+   download, which lets a heart toggle delete data; deletes stay explicit.
+10. **The pick rule extension lives in this spec.** Rejected: a separate
+    spec; this feature is its only consumer and the change is one scope
+    parameter on an existing route.
+
 ## Open questions
 
-1. Show requests: all aired seasons, the latest season only, or season 1?
-   And is a series favorite a follow (`new_only`) as well?
-2. Does `DISCOVER_DIR` need a path contract entry (decision 0001), given
-   Jellyfin on the host reads it and medialab-jellyfin in a container writes
-   it?
-3. Should unfavoriting cancel a request that has not reached the torrent
-   client yet?
-4. Pick rule extension to movie and season scope: separate spec, or part of
-   this one?
-5. Minimum client check: confirm Findroid, Swiftfin and Android TV all show
+1. Minimum client check: confirm Findroid, Swiftfin and Android TV all show
    the heart on Discover items and the `.nfo` title suffix after a refresh.
    A spike before Approved.
 
@@ -169,7 +196,8 @@ the orchestrator. Added to `.env.example` and `docs/secrets.md`.
 - **medialab-contracts**: `JellyfinRequestEvent` parses a real Webhook plugin
   `UserDataSaved` payload; `PlaceholderState` round-trips.
 - **torrent-downloader**: pick rule returns one result for movie scope and
-  season scope, honours the seeder floor, 404 `NO_CANDIDATE` otherwise.
+  season scope, honours the seeder floor, 404 `NO_CANDIDATE` otherwise;
+  season scope rejects single-episode results.
 - **medialab-jellyfin**: placeholder writer creates the folder layout and
   `.nfo` with the tmdb id; remove is idempotent; state suffix rewrite; the
   favorites reader filters to the Discover parent id. Filesystem in
@@ -178,7 +206,10 @@ the orchestrator. Added to `.env.example` and `docs/secrets.md`.
   plus watchlist minus library); a favorite from an allowed user files one
   request; a duplicate attaches; a disallowed user is ignored; webhook rejects
   a wrong secret; `NO_CANDIDATE` lands on the watchlist; `DONE` removes the
-  placeholder; poll and webhook for the same favorite file one request.
+  placeholder; poll and webhook for the same favorite file one request; a
+  series request files one job per aired season and creates a `new_only`
+  follow; unfavorite before submit cancels and restores `available`,
+  after submit is ignored, and with two requesters cancels only on the last.
 
 ## Rollout
 
