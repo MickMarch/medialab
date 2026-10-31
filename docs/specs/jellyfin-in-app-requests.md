@@ -76,7 +76,7 @@ titles that are out at home, so a good release plausibly exists.
 
 | Source | What | Size |
 |---|---|---|
-| Popular, released | TMDB `discover/movie` with `with_release_type=4\|5` (digital or physical) and `release_date.lte=<today>`; `discover/tv` with `first_air_date.lte=<today>`; both `sort_by=popularity.desc` | one page (20) per type |
+| Popular, released | TMDB `discover/movie` with `with_release_type=4\|5` (digital or physical) and `release_date.lte=<today>`; `sort_by=popularity.desc`; shows from trending this week minus any not yet aired (popularity alone is led by decades-old procedurals, checked live) | one page (20) per type |
 | Recommendations | TMDB `{movie\|tv}/{id}/recommendations` for each title any allowed user has favorited in the real Movies or Shows libraries; same released filter applied per result (movie: release dates include type 4 or 5 before today; show: first air date before today) | top `discover_recommendations_per_title` per favorite, default 5 |
 | Watchlist | every saved and followed entry, including every request (each request is a watchlist entry, so a requested title keeps its placeholder until it lands) | all |
 
