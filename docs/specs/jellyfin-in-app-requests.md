@@ -17,7 +17,9 @@ placeholder items where favoriting one files a request.
 ## Goal and non-goals
 
 Goal: a **Discover** library in Jellyfin, filled with placeholder items for
-trending titles and watchlist entries that are not in the real library.
+popular titles that are already out at home, recommendations based on what
+users favorite in the real library, and watchlist entries, none of which are
+in the real library yet. An automatic pick never takes a cam or screener.
 Favoriting a placeholder in any client files a request: the orchestrator runs
 the automatic pick and submits the download with no further step. The
 placeholder shows request state in its title and disappears once the real
@@ -36,8 +38,8 @@ request always follows `new_only`; other start points stay in web).
 | Service | Owns |
 |---|---|
 | medialab-contracts | `JellyfinRequestEvent`, `PlaceholderState` enum, placeholder marker constants, the `DISCOVER_DIR` path contract entry |
-| torrent-downloader | extending the pick rule to movie scope (see Pick rule) |
-| medialab-jellyfin | writing and removing placeholder folders; reading per-user favorites inside the Discover library; parsing the Jellyfin webhook payload |
+| torrent-downloader | extending the pick rule to movie scope and rejecting pre-release captures (see Pick rule); the released-only discover filter and TMDB recommendations (see Discover sources) |
+| medialab-jellyfin | writing and removing placeholder folders; reading per-user favorites, in the Discover libraries and in the real libraries; parsing the Jellyfin webhook payload |
 | medialab-orchestrator | which titles get placeholders; the request flow (pick, submit, watchlist link); the favorites poll; placeholder state updates; allowed-user check |
 | medialab-web | nothing new beyond a settings entry |
 | medialab-bot | nothing |
@@ -66,11 +68,31 @@ placeholder carries a copy of a bundled clip (8 seconds, about 26 KB) that
 says "Not downloaded yet - tap the heart to request", which turns an
 accidental play into an instruction.
 
+### Discover sources
+
+Trending is the wrong source: it is led by titles in theaters or days past
+release, where the only torrents are cams. Every source below is limited to
+titles that are out at home, so a good release plausibly exists.
+
+| Source | What | Size |
+|---|---|---|
+| Popular, released | TMDB `discover/movie` with `with_release_type=4\|5` (digital or physical) and `release_date.lte=<today>`; `discover/tv` with `first_air_date.lte=<today>`; both `sort_by=popularity.desc` | one page (20) per type |
+| Recommendations | TMDB `{movie\|tv}/{id}/recommendations` for each title any allowed user has favorited in the real Movies or Shows libraries; same released filter applied per result (movie: release dates include type 4 or 5 before today; show: first air date before today) | top `discover_recommendations_per_title` per favorite, default 5 |
+| Watchlist | every saved and followed entry, including every request (each request is a watchlist entry, so a requested title keeps its placeholder until it lands) | all |
+
+Desired set = union of the three, deduplicated by `(media_type, tmdb_id)`,
+minus TMDB ids already in the real library (existing `/library/tmdb-ids`).
+
+torrent-downloader adds a `released=true` flag to `GET /discover/{media_type}`
+and `GET /discover/{media_type}/recommendations/{tmdb_id}`, both cached like
+the existing discover lists. Real-library favorites come from the same
+per-user favorites reader as requests, filtered to the real libraries instead
+of Discover.
+
 The orchestrator reconciles on a schedule (`discover_refresh_minutes`):
-desired set = trending movies and shows (existing discover cache) plus
-watchlist entries, minus TMDB ids already in the real library (existing
-`/library/tmdb-ids`). medialab-jellyfin adds missing folders, removes stale
-ones, then triggers one scan of the Discover libraries.
+medialab-jellyfin adds missing folders, removes stale ones, then triggers one
+scan of the Discover libraries. A placeholder with a non-`available` state is
+never removed by reconcile, whatever its source does.
 
 ### Request detection
 
@@ -120,6 +142,12 @@ single-season pack via `is_exact_season_pack`). It gains movie scope:
 `media_type=movie`, no season or episode, keeping only releases that parse
 with no season or episode. Same rule otherwise: resolution bucket with
 fallback, `follow_minimum_seeders` floor, most seeders then largest file.
+
+Every automatic pick (movie, season, episode, so follows too) rejects
+pre-release captures: releases whose PTN quality is Cam, Telesync, Telecine
+or Screener (HDCAM, HDTS, TS, PDVD, TC, DVDSCR). A cam named `HDCAM 1080p`
+otherwise sits in the 1080p bucket and wins on seeders. Manual search in web
+and the bot is unchanged; a cam is only ever chosen by hand.
 
 ### State feedback
 
@@ -196,6 +224,17 @@ the orchestrator. Added to `.env.example` and `docs/secrets.md`.
     copy probes and plays, and swapping the file kept the item id and the
     favorite.
 
+12. **Popular-and-released, not trending.** Rejected: TMDB trending, which
+    is led by titles in theaters with only cam releases available.
+13. **Recommendations come from favorites in the real library.** Rejected:
+    TMDB `/similar`, which matches on keywords and genres and returns weaker
+    lists than `/recommendations`, which is built from viewing behaviour.
+    Rejected: recommendations from watch history, which includes titles a
+    user disliked; a heart is an explicit signal.
+14. **Automatic picks never take a cam or screener.** Rejected: a
+    resolution-only rule, which picked `HDCAM 1080p` on seeders. Manual search
+    keeps them so a user can still choose one deliberately.
+
 ## Open questions
 
 None.
@@ -205,14 +244,20 @@ None.
 - **medialab-contracts**: `JellyfinRequestEvent` parses a real Webhook plugin
   `UserDataSaved` payload; `PlaceholderState` round-trips.
 - **torrent-downloader**: pick rule returns one movie release for movie
-  scope, rejects TV-named releases, honours the seeder floor and bucket
-  fallback, 404 `NO_CANDIDATE` otherwise.
+  scope, rejects TV-named releases, rejects cam, telesync, telecine and
+  screener releases in every scope, honours the seeder floor and bucket
+  fallback, 404 `NO_CANDIDATE` otherwise; `released=true` passes the release
+  type and date filters to TMDB; recommendations drop unreleased results;
+  both cached.
 - **medialab-jellyfin**: placeholder writer creates the folder layout and
   `.nfo` with the tmdb id; remove is idempotent; state suffix rewrite; the
-  favorites reader filters to the Discover parent id. Filesystem in
+  favorites reader filters to the Discover libraries or to the real
+  libraries. Filesystem in
   `tmp_path`, Jellyfin mocked at the client class.
-- **medialab-orchestrator**: reconcile computes the desired set (trending
-  plus watchlist minus library); a favorite from an allowed user files one
+- **medialab-orchestrator**: reconcile computes the desired set (popular
+  released plus recommendations for real-library favorites plus watchlist,
+  deduplicated, minus library) and never removes a non-`available`
+  placeholder; a favorite from an allowed user files one
   request; a duplicate attaches; a disallowed user is ignored; webhook rejects
   a wrong secret; `NO_CANDIDATE` lands on the watchlist; `DONE` removes the
   placeholder; poll and webhook for the same favorite file one request; a
@@ -223,7 +268,8 @@ None.
 ## Rollout
 
 1. medialab-contracts PR (models, constants), release.
-2. torrent-downloader PR (pick movie scope), release.
+2. torrent-downloader PRs: pick movie scope, then cam rejection (both
+   shipped); released filter and recommendations, release.
 3. medialab-jellyfin PR (placeholder writer, favorites reader, clip), release.
 4. medialab-orchestrator PR (reconcile, request flow, webhook, poll), release.
 5. medialab-setup: create Discover libraries; `docs/host-setup.md` and
