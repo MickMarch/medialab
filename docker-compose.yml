@@ -103,6 +103,12 @@ services:
     image: medialab/medialab-jellyfin:${MEDIALAB_JELLYFIN_VERSION:-dev}
     env_file:
       - ./medialab-jellyfin/.env
+    environment:
+      # Fixed container side of the Discover mount; the host side is the root
+      # .env DISCOVER_HOST_DIR.
+      DISCOVER_MOUNT_PATH: /discover
+    volumes:
+      - "${DISCOVER_HOST_DIR}:/discover"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
