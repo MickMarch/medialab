@@ -96,15 +96,19 @@ never removed by reconcile, whatever its source does.
 
 ### Request detection
 
-Two paths, per decision 0003 (webhook fast path, poll safety net):
+Two paths, per decision 0003 (webhook fast path, poll safety net). The poll
+ships first; the webhook is a later PR once the flow works end to end.
 
-1. **Webhook.** The official Jellyfin Webhook plugin sends `UserDataSaved`
-   to `POST /jellyfin/events` on the orchestrator with a shared secret
-   header. Events for items outside the Discover libraries, or where
-   `IsFavorite` is false, are ignored.
-2. **Poll.** Every `discover_poll_seconds`, medialab-jellyfin lists
-   `GET /Users/{id}/Items?Filters=IsFavorite&ParentId=<discover>` for each
-   allowed user. New favorites become requests. Works with no plugin at all.
+1. **Poll.** Every `discover_poll_seconds` (default 30), the orchestrator asks
+   medialab-jellyfin for each allowed user's favorites on Discover
+   placeholders (`GET /discover/favorites?scope=discover`). A favorite not yet
+   on a request becomes one; a request whose users all dropped the favorite
+   is a candidate for cancel (below). Works with no plugin at all.
+2. **Webhook (later).** The official Jellyfin Webhook plugin sends
+   `UserDataSaved` to `POST /jellyfin/events` on the orchestrator with a
+   shared secret header, checked in constant time. That route is mounted
+   without the gateway API key dependency. Events for items outside the
+   Discover libraries, or where `IsFavorite` is false, are ignored.
 
 A favorite is a request once. The orchestrator stores `(media_type, tmdb_id)`
 with the requesting Jellyfin user; repeat favorites, or the same title from a
@@ -120,19 +124,31 @@ last one unfavorites.
 ### Request flow
 
 ```
-favorite -> REQUESTED -> picking -> SUBMITTED (job id) -> DONE: placeholder removed
-                           \-> NO_CANDIDATE: saved to watchlist, title shows "Not found yet"
+favorite -> REQUESTED -> SUBMITTED (job ids) -> library has it: placeholder removed, request closed
+                \-> NOT_FOUND -> retried every jellyfin_request_retry_hours
 ```
 
-- Movie: pick route with movie scope; submit through the existing pipeline.
-- Show: pick route with season scope for every aired season (specials
-  excluded), one job per season, then the show becomes a `following` watchlist
-  entry with start `new_only`, so future episodes arrive through the existing
-  follow poll. A season with no candidate is left for the watchlist retry;
-  per-episode fallback inside a season is not attempted.
-- A movie request upserts a `saved` watchlist entry, so it is visible in web
-  and the bot and survives a failed pick.
-- `NO_CANDIDATE` items are retried by the watchlist's existing schedule.
+Requests live in a new orchestrator table, `jellyfin_request`: primary key
+`(media_type, tmdb_id)`, status, requesting Jellyfin user ids, job ids,
+`last_tried_at`. Jobs carry no request link, so the table is the link.
+
+- **Movie:** pick route with movie scope; submit through the existing
+  download path; upsert a `saved` watchlist entry so the request is visible
+  in web and the bot (the existing DONE hook removes it).
+- **Show:** seasons are split at the first unfinished one (a season that has
+  not aired all its episodes, or the latest season while the show is still
+  returning). Every finished season gets a season-pack pick, one job each.
+  Then the show is saved and followed with start `from` season = first
+  unfinished, episode 1, so the aired episodes of the current season and all
+  future ones arrive through the existing follow poll. A show with every
+  season finished is followed `new_only`. A finished season with no pack
+  candidate is retried with the request; per-episode fallback inside a
+  finished season is left to the user (web follow `from`).
+- **Retry:** a `NOT_FOUND` movie, or a show with finished seasons still
+  unpicked, is re-picked every `jellyfin_request_retry_hours` (default 12).
+- **Closing:** a request closes when its title is in the library (movie) or
+  every finished season it asked for has a DONE job (show; the follow carries
+  on by itself).
 
 ### Pick rule
 
@@ -157,24 +173,41 @@ The state is written as a title suffix in the `.nfo` (for example
 title, so this is the only feedback channel that reaches all of them. The
 Discord notice already sent on submit is unchanged.
 
+State is derived on every request poll tick, not pushed from the pipeline:
+no job yet or picking is `requested`, any job between `DOWNLOAD_SUBMITTED`
+and `SCAN` is `downloading`, a `NOT_FOUND` request is `not_found`. The
+placeholder is rewritten only when the derived state differs (the jellyfin
+PUT is a no-op otherwise). Job status is written from many places in the
+pipeline; reading it each tick keeps the pipeline untouched at the cost of
+up to one poll interval of lag.
+
 ### Access
 
-`jellyfin_request_users`: runtime setting listing Jellyfin user ids allowed
-to request. Empty means nobody, so installing the feature grants nothing until
-set. Favorites from other users are ignored and logged.
+`jellyfin_request_users`: runtime setting, comma-separated Jellyfin user ids
+allowed to request (settings have no list type). Its default is empty, which
+means nobody, so installing the feature grants nothing until set; resetting
+the setting returns to nobody. Favorites from other users are ignored and
+logged. The same users' real-library favorites seed recommendations.
+
+Other orchestrator runtime settings: `discover_refresh_seconds` (reconcile
+interval, default 21600), `discover_poll_seconds` (favorites poll, default
+30), `discover_recommendations_per_title` (default 5),
+`jellyfin_request_retry_hours` (default 12). Intervals of 0 pause the loop,
+like the existing pollers.
 
 ### Host steps
 
 - Add the two Discover libraries (setup CLI, `POST /library/paths`).
 - Per user, exclude Discover from "Continue Watching" and "Latest" (Jellyfin
   Home settings). Documented in `docs/host-setup.md`.
-- Optional: install the Jellyfin Webhook plugin and point `UserDataSaved` at
-  the orchestrator.
+- Optional, with the webhook PR: install the Jellyfin Webhook plugin and
+  point `UserDataSaved` at the orchestrator.
 
 ### Secrets
 
-`JELLYFIN_WEBHOOK_SECRET`: shared header value between the Webhook plugin and
-the orchestrator. Added to `.env.example` and `docs/secrets.md`.
+With the webhook PR: `JELLYFIN_WEBHOOK_SECRET`, a shared header value between
+the Webhook plugin and the orchestrator. Added to `.env.example` and
+`docs/secrets.md`. The poll needs no new secret.
 
 ## Decisions
 
@@ -235,6 +268,21 @@ the orchestrator. Added to `.env.example` and `docs/secrets.md`.
     resolution-only rule, which picked `HDCAM 1080p` on seeders. Manual search
     keeps them so a user can still choose one deliberately.
 
+15. **Placeholder state is derived each poll tick.** Rejected: hooks on job
+    status writes, which live in eight or more places across the worker,
+    health poll, submit, delete and dismiss paths; a missed one leaves a
+    stale title forever, a missed tick only delays it.
+16. **Show requests use packs for finished seasons and a follow from the
+    first unfinished season.** Rejected: packs for every aired season plus a
+    `new_only` follow; a season still airing has no pack, so its aired
+    episodes were never fetched.
+17. **Poll first, webhook later.** Rejected: both in one PR; the poll alone
+    works with no plugin and a 30-second lag, and the webhook needs a new
+    unkeyed route with its own secret check, better reviewed on its own.
+18. **Requests retry on their own schedule.** Rejected: relying on the
+    watchlist, whose only retry loop walks followed shows; a saved movie is
+    never retried.
+
 ## Open questions
 
 None.
@@ -257,13 +305,15 @@ None.
 - **medialab-orchestrator**: reconcile computes the desired set (popular
   released plus recommendations for real-library favorites plus watchlist,
   deduplicated, minus library) and never removes a non-`available`
-  placeholder; a favorite from an allowed user files one
-  request; a duplicate attaches; a disallowed user is ignored; webhook rejects
-  a wrong secret; `NO_CANDIDATE` lands on the watchlist; `DONE` removes the
-  placeholder; poll and webhook for the same favorite file one request; a
-  series request files one job per aired season and creates a `new_only`
-  follow; unfavorite before submit cancels and restores `available`,
-  after submit is ignored, and with two requesters cancels only on the last.
+  placeholder; a favorite from an allowed user files one request; a
+  duplicate attaches; a disallowed user is ignored; a movie with no candidate
+  is `not_found` and retried after `jellyfin_request_retry_hours`; derived
+  state follows the request's jobs; a show request picks one pack per
+  finished season and follows `from` the first unfinished season (or
+  `new_only` when all are finished); unfavorite before submit cancels and
+  restores `available`, after submit is ignored, and with two requesters
+  cancels only on the last. Webhook PR: a wrong secret is rejected, poll and
+  webhook for the same favorite file one request.
 
 ## Rollout
 
@@ -271,6 +321,8 @@ None.
 2. torrent-downloader PRs: pick movie scope, then cam rejection (both
    shipped); released filter and recommendations, release.
 3. medialab-jellyfin PR (placeholder writer, favorites reader, clip), release.
-4. medialab-orchestrator PR (reconcile, request flow, webhook, poll), release.
+4. medialab-orchestrator PRs: plumbing (contracts pin, client methods,
+   settings); Discover reconcile loop; requests (table, poll, flow, retry,
+   derived state); release. Webhook as a later PR.
 5. medialab-setup: create Discover libraries; `docs/host-setup.md` and
    `docs/secrets.md` updated in the root repo.
