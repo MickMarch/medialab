@@ -89,10 +89,13 @@ the existing discover lists. Real-library favorites come from the same
 per-user favorites reader as requests, filtered to the real libraries instead
 of Discover.
 
-The orchestrator reconciles on a schedule (`discover_refresh_minutes`):
-medialab-jellyfin adds missing folders, removes stale ones, then triggers one
-scan of the Discover libraries. A placeholder with a non-`available` state is
-never removed by reconcile, whatever its source does.
+The orchestrator reconciles at startup and then every
+`discover_refresh_seconds`: medialab-jellyfin adds missing folders, removes
+stale ones, then triggers one scan of each changed Discover library. A
+placeholder with a non-`available` state is never removed by reconcile,
+whatever its source does, and an existing placeholder is never rewritten by
+it. When any source read fails the pass only adds; when the library or the
+placeholder listing cannot be read the pass is skipped.
 
 ### Request detection
 
@@ -282,6 +285,14 @@ the Webhook plugin and the orchestrator. Added to `.env.example` and
 18. **Requests retry on their own schedule.** Rejected: relying on the
     watchlist, whose only retry loop walks followed shows; a saved movie is
     never retried.
+
+19. **A reconcile with a failed source only adds.** Rejected: removing
+    whatever the answering sources left out; one TMDB outage would empty
+    Discover and the next pass would rebuild it, churning every client's
+    view.
+20. **Reconcile runs at startup, then on the interval.** Rejected:
+    interval first, like the follow poll; with a six-hour default a fresh
+    deploy would show an empty Discover for hours.
 
 ## Open questions
 
