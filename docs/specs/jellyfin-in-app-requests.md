@@ -127,31 +127,34 @@ last one unfavorites.
 ### Request flow
 
 ```
-favorite -> REQUESTED -> SUBMITTED (job ids) -> library has it: placeholder removed, request closed
+favorite -> REQUESTED -> SUBMITTED -> library has it: placeholder removed, request CLOSED
                 \-> NOT_FOUND -> retried every jellyfin_request_retry_hours
+unfavorite by the last requester before SUBMITTED -> CANCELLED, placeholder available
 ```
 
 Requests live in a new orchestrator table, `jellyfin_request`: primary key
-`(media_type, tmdb_id)`, status, requesting Jellyfin user ids, job ids,
-`last_tried_at`. Jobs carry no request link, so the table is the link.
+`(media_type, tmdb_id)`, canonical title and year (from TMDB when filed, since
+a placeholder listing carries no year), status, requesting Jellyfin user ids,
+`last_tried_at`. Jobs carry no request link and need none: a placeholder
+exists only for a title not in the library, so the title key joins a request
+to its jobs.
 
 - **Movie:** pick route with movie scope; submit through the existing
   download path; upsert a `saved` watchlist entry so the request is visible
   in web and the bot (the existing DONE hook removes it).
-- **Show:** seasons are split at the first unfinished one (a season that has
-  not aired all its episodes, or the latest season while the show is still
-  returning). Every finished season gets a season-pack pick, one job each.
-  Then the show is saved and followed with start `from` season = first
-  unfinished, episode 1, so the aired episodes of the current season and all
-  future ones arrive through the existing follow poll. A show with every
-  season finished is followed `new_only`. A finished season with no pack
-  candidate is retried with the request; per-episode fallback inside a
-  finished season is left to the user (web follow `from`).
-- **Retry:** a `NOT_FOUND` movie, or a show with finished seasons still
-  unpicked, is re-picked every `jellyfin_request_retry_hours` (default 12).
-- **Closing:** a request closes when its title is in the library (movie) or
-  every finished season it asked for has a DONE job (show; the follow carries
-  on by itself).
+- **Show:** saved and followed with start `beginning`, then checked at
+  once instead of waiting for the follow poll. The follow poll already fetches
+  a complete season nothing was fetched from as one pack, parks a season
+  whose pack is missing for the user's decision (with the Discord notice),
+  and fetches everything else episode by episode
+  (`docs/specs/follow-season-packs.md`). A show the user already follows
+  keeps that follow.
+- **Retry:** a `NOT_FOUND` movie is re-picked every
+  `jellyfin_request_retry_hours` (default 12). A movie whose every job was
+  deleted or dismissed goes back to `NOT_FOUND`. Shows retry through the
+  follow poll.
+- **Closing:** a request closes, and its placeholder is removed, when its
+  title is in the library; for a show the follow carries on by itself.
 
 ### Pick rule
 
@@ -275,10 +278,8 @@ the Webhook plugin and the orchestrator. Added to `.env.example` and
     status writes, which live in eight or more places across the worker,
     health poll, submit, delete and dismiss paths; a missed one leaves a
     stale title forever, a missed tick only delays it.
-16. **Show requests use packs for finished seasons and a follow from the
-    first unfinished season.** Rejected: packs for every aired season plus a
-    `new_only` follow; a season still airing has no pack, so its aired
-    episodes were never fetched.
+16. Superseded by 21. ~~Show requests use packs for finished seasons and a
+    follow from the first unfinished season.~~
 17. **Poll first, webhook later.** Rejected: both in one PR; the poll alone
     works with no plugin and a 30-second lag, and the webhook needs a new
     unkeyed route with its own secret check, better reviewed on its own.
@@ -293,6 +294,19 @@ the Webhook plugin and the orchestrator. Added to `.env.example` and
 20. **Reconcile runs at startup, then on the interval.** Rejected:
     interval first, like the follow poll; with a six-hour default a fresh
     deploy would show an empty Discover for hours.
+
+21. **A show request is a follow from the beginning.** Rejected: decision
+    16's request-side pack picks; the follow poll already splits a followed
+    show into packs for complete seasons and episodes for the rest, with
+    retry profiles and the pack-not-found notice, so a second copy in the
+    request flow would drift from it.
+22. **A request closes when its title is in the library.** Rejected: waiting
+    for every season's DONE job; once the show is in the real library the
+    Discover copy is a duplicate, and the follow keeps fetching.
+23. **A request's title and year come from TMDB when it is filed.**
+    Rejected: adding the year to the placeholder listing, a contracts and
+    medialab-jellyfin change for a value the orchestrator can already read;
+    rewriting a placeholder with no year would drop it from the `.nfo`.
 
 ## Open questions
 
