@@ -34,3 +34,8 @@ operator sees at the moment they need it, which made them better.
 - Treat comments in a template as user-facing text and write them that way.
 - Keep the one table the tool does own small and tested against the files it
   describes: every binding must name a real key in a real template.
+- An empty value in a template means "the operator must supply this"; the
+  update migration stops on any new empty key the binding table does not
+  fill. A setting that is optional gets a real default, or stays commented
+  out with an example when its default is "unset". Learned 2026-11-02 when
+  `DISCOVER_MOUNT_PATH=` and `JELLYFIN_REQUEST_USERS=` blocked an update.
