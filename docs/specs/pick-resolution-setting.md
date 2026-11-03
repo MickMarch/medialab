@@ -1,6 +1,6 @@
 # Spec: Pick resolution setting
 
-Status: Draft
+Status: Approved
 Issue: MickMarch/medialab#153
 
 ## Problem
