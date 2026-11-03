@@ -107,6 +107,20 @@ does not see a download until it is placed and named. The folders are created
 once (`mkdir F:\Media\_incoming\Movies F:\Media\_incoming\Shows`); the doctor
 warns when either is missing.
 
+### Discover libraries
+
+`DISCOVER_HOST_DIR` (root `.env`, default `F:\MedialabDiscover`) holds the
+request placeholders, outside the media root so the real libraries never index
+one. `medialab-setup` creates its `Movies`, `Shows` and `_clip` folders and the
+"Discover Movies" and "Discover Shows" libraries over the first two; an
+existing library with either name or path is left alone. Never point a
+Discover library at `_clip`.
+
+Each Jellyfin user who should not see placeholders on Home hides them once:
+profile, **Settings > Home**, untick both Discover libraries in the latest
+media list, and move them below the real libraries. This is per user, so it is
+not scripted.
+
 ## 5. Things already right, left alone
 
 - The containers carry `restart: unless-stopped`; they return with the engine.
