@@ -16,6 +16,7 @@ obtain them.
 | Jellyfin API key | Jellyfin dashboard -> Administration -> API Keys | `medialab-jellyfin/.env`, with `JELLYFIN_HOST` pointing at the host from inside the container |
 | Discord bot token + guild id | Discord developer portal -> your application -> Bot | `medialab-bot/.env` |
 | Discord notify webhook URL (optional) | Discord -> the target channel -> Edit Channel -> Integrations -> Webhooks -> New Webhook -> Copy Webhook URL. Anyone holding the URL can post to that channel, so treat it as a secret. | `medialab-orchestrator/.env` as `DISCORD_NOTIFY_WEBHOOK_URL`; unset means no follow notices |
+| Jellyfin webhook secret (optional) | Generate (`python -c "import secrets; print(secrets.token_urlsafe(32))"`). Rotate by changing both places. | `medialab-orchestrator/.env` as `JELLYFIN_WEBHOOK_SECRET`, and the Jellyfin Webhook plugin destination's `X-Medialab-Webhook-Secret` header; unset means the request poll alone |
 | Web UI password + cookie secret | Choose any strong password; generate the secret (`python -c "import secrets; print(secrets.token_urlsafe(48))"`). Rotating the secret signs everyone out. | `medialab-web/.env` as `WEB_PASSWORD`, `WEB_SECRET_KEY` |
 | Jackett API key (optional) | Only if Jackett is installed; shown top-right of its web UI | `jackett.json` in qBittorrent's `nova3/engines` directory, not in any service `.env`. Not in use on this host. |
 

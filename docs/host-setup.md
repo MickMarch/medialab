@@ -121,6 +121,15 @@ profile, **Settings > Home**, untick both Discover libraries in the latest
 media list, and move them below the real libraries. This is per user, so it is
 not scripted.
 
+Optional, for requests within seconds instead of the 30-second poll: install
+the Jellyfin **Webhook** plugin (Dashboard > Plugins > Catalog), add a
+**Generic** destination with URL
+`http://127.0.0.1:8000/api/v1/jellyfin/events` (Jellyfin runs on the host and
+the gateway port is loopback only), notification
+type **User Data Saved** only, and a header `X-Medialab-Webhook-Secret` equal
+to `JELLYFIN_WEBHOOK_SECRET` (`docs/secrets.md`). The template does not
+matter; the orchestrator ignores the body.
+
 ## 5. Things already right, left alone
 
 - The containers carry `restart: unless-stopped`; they return with the engine.
