@@ -107,11 +107,11 @@ ships first; the webhook is a later PR once the flow works end to end.
    placeholders (`GET /discover/favorites?scope=discover`). A favorite not yet
    on a request becomes one; a request whose users all dropped the favorite
    is a candidate for cancel (below). Works with no plugin at all.
-2. **Webhook (later).** The official Jellyfin Webhook plugin sends
+2. **Webhook.** The official Jellyfin Webhook plugin sends
    `UserDataSaved` to `POST /jellyfin/events` on the orchestrator with a
    shared secret header, checked in constant time. That route is mounted
-   without the gateway API key dependency. Events for items outside the
-   Discover libraries, or where `IsFavorite` is false, are ignored.
+   without the gateway API key dependency. A valid event wakes the poll
+   (decision 24); its body is not read.
 
 A favorite is a request once. The orchestrator stores `(media_type, tmdb_id)`
 with the requesting Jellyfin user; repeat favorites, or the same title from a
@@ -307,6 +307,14 @@ the Webhook plugin and the orchestrator. Added to `.env.example` and
     Rejected: adding the year to the placeholder listing, a contracts and
     medialab-jellyfin change for a value the orchestrator can already read;
     rewriting a placeholder with no year would drop it from the `.nfo`.
+
+24. **A webhook event wakes the poll; it does not file a request.**
+    Rejected: parsing the plugin payload into a `JellyfinRequestEvent` and
+    filing from it. The plugin's template variables for the favorite flag and
+    provider ids are undocumented, `UserDataSaved` also fires repeatedly
+    during playback, and a second filer would race the poll. Waking the poll
+    (with a short settle so a burst is one tick) keeps one filer and makes
+    the payload irrelevant.
 
 ## Open questions
 
