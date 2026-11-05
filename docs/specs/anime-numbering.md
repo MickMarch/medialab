@@ -81,7 +81,7 @@ behaviour is unchanged.
 | Repo | Change |
 |---|---|
 | medialab-contracts | Two enums: `NumberingMode` (`auto`, `tmdb`, `group`) and `ReleaseNumberingSource` (`release`, `absolute`). Two models: `EpisodeNumber` (`season`, `episode`, `release_season`, `release_episode`, `absolute`) and `ShowNumbering` (`tmdb_id`, `group_id: str \| None`, `group_name`, `episodes: list[EpisodeNumber]`). `FollowRequest` gains `numbering: NumberingMode = auto`, `episode_group_id: str \| None` (required when `group`), and `prefer_multi_audio: bool = False`. |
-| torrent-downloader | Read routes: `GET /search/tmdb/show/{id}/episode-groups` lists the type-6 candidates and marks the auto choice; `GET /search/tmdb/show/{id}/numbering?group=<id\|auto\|tmdb>` returns a cached `ShowNumbering`. The pick endpoint takes an optional `group` and works in canonical numbering. For a wanted episode it searches in three forms: `Title S03E01`, `Title 48`, and the canonical form. A candidate matches on parsed release `(season, episode)`, on episode alone with no season parsed and equal to the absolute number, or on canonical `(season, episode)`. A pack pick for a release season searches `Title S03` and matches parsed season 3. `prefer_multi_audio=true` ranks `multi_audio` releases first inside the resolution bucket. Seeders and size still break ties, and the existing seeder floor still applies. |
+| torrent-downloader | Read routes: `GET /search/tmdb/show/{id}/episode-groups` lists the type-6 candidates and marks the auto choice; `GET /search/tmdb/show/{id}/numbering?group=<id\|auto\|tmdb>` returns a cached `ShowNumbering`. The pick endpoint takes the release `season`/`episode` and an optional `absolute` (decision 8). For a wanted episode it searches `Title S03E01`, `Title 48` and `Title S03`. A candidate matches on parsed release `(season, episode)`, or with no season parsed on the absolute number read by a dedicated parser (PTN takes digits from the trailing CRC of `Title - 48 (1080p) [3D64E486]`). A group id that is not one of the show's TV groups is `422`, so no caller-supplied id reaches a TMDB path. A pack pick for a release season searches `Title S03` and matches parsed season 3. `prefer_multi_audio=true` ranks `multi_audio` releases first inside the resolution bucket. Seeders and size still break ties, and the existing seeder floor still applies. |
 | medialab-orchestrator | Follow storage keeps `numbering`, `episode_group_id` and `prefer_multi_audio`. The follow poll fetches the show's `ShowNumbering` once per check. `wanted_episodes` and the follow start stay canonical. A pack season is now a release season: `pack_eligible` and the pack search group canonical episodes by `release_season`, and a release-season pack covers exactly its own canonical episodes. Rename parses each video file to release, absolute or canonical form, maps it through the show's numbering, and places it under the canonical name (`Season 01/Title S01E48`). The show's numbering is the follow's choice, or auto when the show is not followed, cached per show. A file that matches nothing goes to `extras/` as today. Changing a follow's numbering clears that show's `follow_season` rows, because their season numbers change meaning. |
 | medialab-web | Show follow form: a Numbering select offering Auto (it shows the group it resolved to), TMDB, and each listed group by name. A "Prefer dual audio" checkbox. The show browser lists each canonical episode with its release code beside it (`S01E48 · S03E01`), so a user can see the mapping. This is web-only under the UI scope rule, because it is part of a stateful follow form. |
 
@@ -127,6 +127,34 @@ existing redo flow can replace it once a dual audio release exists.
    how pack releases are named. Rejected: canonical-season packs, the cause
    of this bug, which can never be found for a show like this.
 
+8. **The orchestrator translates; the pick takes release codes.** Rejected:
+   a `group` parameter on the pick with canonical scope. The orchestrator
+   already holds the numbering for pack grouping, the browse view and
+   rename, so it sends the release code and absolute number; the pick stays
+   numbering-agnostic and job scopes are the release codes that were
+   searched.
+9. **Unaired episodes past a group continue its last release season.** An
+   airing show's group often lags TMDB by a few announced episodes; refusing
+   the group until it catches up would drop the show to TMDB numbering
+   mid-season. Aired episodes must still all be grouped.
+10. **Accepted review risks.** The absolute search pattern is zero-padded
+    only (`Title 05`), matching fansub convention; an absolute match does not
+    check the title, the same exposure an `SxxEyy` match already has since
+    search results come from a title query. Revisit if a wrong pick is seen.
+11. **Episode jobs keep canonical scope; season jobs are release seasons.**
+    Rejected: release scope for every follow job, which a manual canonical
+    download of the same episode would not match, so the follow fetched it
+    twice (found in review). A season search returns the release season's
+    pack, so a season scope is read as one.
+12. **Rename fails closed.** When the numbering cannot be read, rename
+    fails and retries rather than placing a release code (`S03E01`) in a
+    canonical season for good. Reads (browse, poll) still fall back to TMDB
+    numbering.
+13. **Known limit: a manual episode search uses the TMDB code.** The web
+    episode Find button searches `S01E48`, which finds nothing for a mapped
+    show; the season Find (release season) and the follow work. Tracked as a
+    follow-up.
+
 ## Open questions
 
 1. **Jellyfin episode groups.** Upstream merged `TmdbEpisodeGroup` series
@@ -137,12 +165,12 @@ existing redo flow can replace it once a dual audio release exists.
    release seasons. It is out of scope here.
 2. **Specials.** Group `order` 0 sometimes holds the movie or recap episodes
    (5 to 10 for JUJUTSU KAISEN). They stay excluded from follows, as specials
-   already are, and get no absolute number. Confirm against the live groups
-   during implementation.
+   already are, and get no absolute number. Confirmed against the live
+   JUJUTSU KAISEN groups: E48 maps to release S03E01, absolute 48.
 3. **Absolute number collisions.** A show can have absolute fansub numbers
    and also seasons in its release names. A release name with no season and
-   episode 12 then matches absolute 12 only. Check that this holds against
-   real release samples in the downloader tests.
+   episode 12 then matches absolute 12 only. Covered by the downloader
+   tests with real release names (ToonsHub, SubsPlease, Erai-raws, shincaps).
 
 ## Test plan
 
