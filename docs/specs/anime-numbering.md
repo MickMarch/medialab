@@ -141,6 +141,19 @@ existing redo flow can replace it once a dual audio release exists.
     only (`Title 05`), matching fansub convention; an absolute match does not
     check the title, the same exposure an `SxxEyy` match already has since
     search results come from a title query. Revisit if a wrong pick is seen.
+11. **Episode jobs keep canonical scope; season jobs are release seasons.**
+    Rejected: release scope for every follow job, which a manual canonical
+    download of the same episode would not match, so the follow fetched it
+    twice (found in review). A season search returns the release season's
+    pack, so a season scope is read as one.
+12. **Rename fails closed.** When the numbering cannot be read, rename
+    fails and retries rather than placing a release code (`S03E01`) in a
+    canonical season for good. Reads (browse, poll) still fall back to TMDB
+    numbering.
+13. **Known limit: a manual episode search uses the TMDB code.** The web
+    episode Find button searches `S01E48`, which finds nothing for a mapped
+    show; the season Find (release season) and the follow work. Tracked as a
+    follow-up.
 
 ## Open questions
 

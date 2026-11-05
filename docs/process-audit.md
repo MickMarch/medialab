@@ -57,5 +57,27 @@ Earlier this session, the same pattern showed up:
   - Lesson: a reviewer pass on every PR is cheap and found a real security
     issue the author missed. Run A3 automatically whenever a diff touches a
     URL built from user input, auth, or secrets.
+- A2 ran on medialab-orchestrator#72 (about 6 minutes): 2 blocking, 8 risks.
+  - Blocking, fixed:
+    - a manual download and a follow job on the same episode did not match,
+      so it would have downloaded twice;
+    - rename failed open on a numbering outage, misfiling an episode for
+      good.
+  - Risks, fixed:
+    - the migration wiped season states;
+    - an unknown release code was given an invented season;
+    - an episode grouped under specials was searched forever;
+    - numbering was read twice per tick;
+    - season decisions did not match the web's season rows. This one needed
+      a web change: group by release season.
+  - Accepted:
+    - the absolute regex is copied in two services. The workspace rule is to
+      extract on the third repetition.
+    - the per-release-season count gate. The group is built from the TMDB
+      listing, so the counts agree by construction.
+  - Lesson: the author's own tests encoded the bugs. In both blocking cases
+    the test asserted the wrong behaviour. A4 (a separate test author working
+    from the spec) would likely have caught the scope mismatch before any
+    code was written.
 - H6: the user raised custom libraries mid-task. It was captured as #164 with
   no spec. No interruption was needed, because the user only stated intent.
