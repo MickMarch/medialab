@@ -1,6 +1,6 @@
 # Spec: Anime episode numbering and dual audio
 
-Status: Approved
+Status: Shipped
 Issue: MickMarch/medialab#162
 
 ## Problem
