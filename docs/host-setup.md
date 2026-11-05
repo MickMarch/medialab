@@ -130,6 +130,15 @@ type **User Data Saved** only, and a header `X-Medialab-Webhook-Secret` equal
 to `JELLYFIN_WEBHOOK_SECRET` (`docs/secrets.md`). The template does not
 matter; the orchestrator ignores the body.
 
+### Audio tracks
+
+A dual or multi audio release (a follow with "Prefer dual audio") keeps
+every track in one file; switch tracks from the player's audio menu in any
+client. Each Jellyfin user sets the default once: profile, **Settings >
+Playback**, **Preferred audio language** (for example Japanese, with
+English subtitles under **Subtitles**). This is per user, so it is not
+scripted.
+
 ## 5. Things already right, left alone
 
 - The containers carry `restart: unless-stopped`; they return with the engine.
