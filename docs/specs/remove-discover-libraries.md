@@ -109,6 +109,24 @@ in-Jellyfin requests were removed (`docs/decisions/`).
    cheaply. Deleting files on the host is not reversible, so it stays a
    documented manual step.
 
+7. **medialab-jellyfin keeps excluding the retired library names.** If
+   teardown is skipped or fails, a leftover Discover library would otherwise
+   report placeholder titles, and a placeholder's stub `S01E01`, as owned, and
+   the follow would never fetch them. The alternative was to drop the filter
+   with the libraries. Rejected: one failed teardown would silently block
+   downloads. The exclusion uses a local constant and goes in a later change,
+   once no install has the libraries.
+8. **Open requests survive the table drop.** A `requested` or `not_found`
+   request had filed nothing, so dropping `jellyfin_request` would lose it.
+   Each one becomes a saved watchlist entry first. The alternative was to
+   only log them. Rejected: the user asked for the title and should still
+   see it.
+9. **`update` strips the removed keys from service `.env` files.** Otherwise
+   a local `uv run` fails, because the settings loader rejects unknown dotenv
+   keys. Teardown also runs on an up-to-date `update`, so a warned teardown is
+   retried. It stays a warning that names each library left behind, which is
+   safe because of decision 7.
+
 ## Open questions
 
 None.
