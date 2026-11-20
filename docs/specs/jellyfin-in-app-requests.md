@@ -1,6 +1,9 @@
 # Spec: request titles from inside Jellyfin clients
 
-Status: Approved
+Status: Superseded
+
+Superseded by `docs/specs/remove-discover-libraries.md`: the Discover
+libraries and the in-Jellyfin request flow were removed.
 Issue: MickMarch/medialab#142
 
 ## Problem
