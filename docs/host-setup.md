@@ -107,28 +107,17 @@ does not see a download until it is placed and named. The folders are created
 once (`mkdir F:\Media\_incoming\Movies F:\Media\_incoming\Shows`); the doctor
 warns when either is missing.
 
-### Discover libraries
+### Upgrading past Discover libraries
 
-`DISCOVER_HOST_DIR` (root `.env`, default `F:\MedialabDiscover`) holds the
-request placeholders, outside the media root so the real libraries never index
-one. `medialab-setup` creates its `Movies`, `Shows` and `_clip` folders and the
-"Discover Movies" and "Discover Shows" libraries over the first two; an
-existing library with either name or path is left alone. Never point a
-Discover library at `_clip`.
+The Discover Movies and Discover Shows libraries were removed
+(`docs/specs/remove-discover-libraries.md`). `bin/medialab-setup.sh update`
+deletes both libraries from Jellyfin. Two steps stay manual:
 
-Each Jellyfin user who should not see placeholders on Home hides them once:
-profile, **Settings > Home**, untick both Discover libraries in the latest
-media list, and move them below the real libraries. This is per user, so it is
-not scripted.
-
-Optional, for requests within seconds instead of the 30-second poll: install
-the Jellyfin **Webhook** plugin (Dashboard > Plugins > Catalog), add a
-**Generic** destination with URL
-`http://127.0.0.1:8000/api/v1/jellyfin/events` (Jellyfin runs on the host and
-the gateway port is loopback only), notification
-type **User Data Saved** only, and a header `X-Medialab-Webhook-Secret` equal
-to `JELLYFIN_WEBHOOK_SECRET` (`docs/secrets.md`). The template does not
-matter; the orchestrator ignores the body.
+- Delete the old placeholder folder (`DISCOVER_HOST_DIR` in the root `.env`,
+  default `F:\MedialabDiscover`), then remove that line from the root `.env`.
+- Optionally uninstall the Jellyfin **Webhook** plugin (Dashboard > Plugins)
+  and remove `JELLYFIN_WEBHOOK_SECRET` from `medialab-orchestrator/.env`; it
+  only woke the request poll.
 
 ### Audio tracks
 
