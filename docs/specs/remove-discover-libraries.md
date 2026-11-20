@@ -1,6 +1,6 @@
 # Spec: remove the Jellyfin Discover libraries
 
-Status: Draft
+Status: Approved
 Issue: MickMarch/medialab#168
 
 ## Problem
