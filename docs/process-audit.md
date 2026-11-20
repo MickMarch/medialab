@@ -81,3 +81,26 @@ Earlier this session, the same pattern showed up:
     code was written.
 - H6: the user raised custom libraries mid-task. It was captured as #164 with
   no spec. No interruption was needed, because the user only stated intent.
+
+## Log for #168 (remove Discover libraries)
+
+- H2: spec approved with no changes; the design question (remove vs
+  reorder) was settled in one earlier question.
+- Implementation ran as three parallel agents (orchestrator, jellyfin,
+  setup), one per repo, with contracts and root done in the main thread.
+  Wall clock was about 6 minutes for all five PRs.
+- A2 ran once across all four service diffs: 3 blocking, 5 risks, 3 nits.
+  - Blocking, fixed: a skipped teardown was never retried; dropping the
+    Discover filter would let a leftover placeholder read as owned (twice:
+    tmdb ids and the series lookup). The implementer had deleted the very
+    regression tests that encoded this.
+  - Risks, fixed: open requests lost in the table drop; unsafe path checks
+    (`..`, drive-only root); bad Jellyfin bodies crashing update; removed
+    keys left in `.env` breaking local runs.
+  - Lesson: a removal spec needs a "what still depends on this" pass. The
+    reviewer found it; the spec missed it. A1 (spec review) would have
+    caught both blocking items before approval.
+- The fix round reused the same agents (SendMessage), which kept their
+  context and cost about 2 minutes each.
+- pip-audit failed CI on an unrelated advisory. A dependabot security update
+  would have landed it independently.
