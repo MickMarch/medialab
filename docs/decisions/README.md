@@ -18,3 +18,4 @@ explain to the next reader.
 | 0009 | [The network is the kill-switch; the app check is the message](0009-network-is-the-kill-switch.md) |
 | 0010 | [The template is the schema](0010-the-template-is-the-schema.md) |
 | 0011 | [The compose project name is the stack, not the directory](0011-compose-project-name-is-the-stack.md) |
+| 0012 | [Jellyfin shows only real media](0012-jellyfin-shows-only-real-media.md) |
